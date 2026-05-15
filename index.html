@@ -1,0 +1,1707 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AA 组织架构及工作流调整</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Ma+Shan+Zheng&display=swap" />
+<style>
+:root {
+  --paper:  #ffffff;
+  --paper-2:#fafaf8;
+  --paper-3:#f0ecdf;
+  --ink:    #14110c;
+  --ink-soft:#2d2924;
+  --ink-mid:#57534b;
+  --ink-mute:#8c8779;
+  --rule:   #ddd6c3;
+  --rule-fine:#ebe5d2;
+  --rule-strong:#b8b09a;
+  --accent: #15683f;
+  --accent-2:#c5523a;
+  --accent-soft:rgba(21,104,63,0.07);
+  --amber: #a05a17;
+  --amber-soft:#fef3e2;
+  --gray-step:#f3f1ea;
+  --new-tag:#a05a17;
+  --warn:   #8a3326;
+
+  --serif: "Newsreader", "Noto Serif SC", ui-serif, Georgia, "Songti SC", serif;
+  --sans:  "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{scroll-behavior:smooth}  /* 去掉 scroll-snap：自由滚，避免强制吸附引起的视觉晃动 */
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:14.5px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+
+/* ── top bar ── */
+.deck-bar{
+  position:fixed;top:0;left:0;right:0;height:44px;
+  background:rgba(255,255,255,0.94);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  border-bottom:0.5px solid #e5e5e5;
+  box-shadow:0 1px 0 rgba(0,0,0,0.02);
+  z-index:100;
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  padding:0 1.25rem;
+  font-family:var(--mono);font-size:0.65rem;letter-spacing:0.16em;
+  text-transform:uppercase;color:var(--ink-mid);
+}
+.deck-bar .brand{letter-spacing:0.18em;color:var(--ink)}
+.deck-bar .brand span{color:var(--accent-2)}
+.deck-bar .center{text-align:center;color:var(--ink-soft);letter-spacing:0.2em;font-weight:500}
+.deck-bar .right{text-align:right}
+.deck-bar .right .cnt{color:var(--ink);font-weight:500}
+
+/* ── bottom nav ── */
+.deck-foot{
+  position:fixed;bottom:0;left:0;right:0;height:38px;
+  background:rgba(255,255,255,0.94);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  border-top:0.5px solid #e5e5e5;
+  box-shadow:0 -1px 0 rgba(0,0,0,0.02);
+  z-index:100;
+  display:flex;align-items:center;justify-content:center;gap:0.6rem;
+}
+.foot-btn{
+  width:28px;height:28px;border-radius:50%;
+  border:0.5px solid var(--rule-strong);background:var(--paper-2);
+  color:var(--ink-mid);font-family:var(--mono);font-size:0.85rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;line-height:0;padding:0;
+}
+.foot-btn:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.foot-btn:disabled{opacity:0.3;cursor:not-allowed}
+.foot-btn:disabled:hover{background:var(--paper-2);color:var(--ink-mid);border-color:var(--rule-strong)}
+
+.dots{display:flex;align-items:center;gap:0.45rem;padding:0 0.7rem}
+.dot{
+  width:6px;height:6px;background:var(--rule-strong);border-radius:50%;
+  cursor:pointer;transition:all 0.18s;padding:0;border:0;position:relative;
+}
+.dot::after{
+  content:attr(data-name);position:absolute;bottom:16px;left:50%;
+  transform:translateX(-50%);font-family:var(--mono);font-size:0.6rem;
+  white-space:nowrap;background:var(--ink);color:var(--paper);
+  padding:3px 7px;border-radius:2px;opacity:0;pointer-events:none;
+  letter-spacing:0.06em;transition:opacity 0.15s;
+}
+.dot:hover::after{opacity:1}
+.dot:hover{background:var(--accent-2);transform:scale(1.4)}
+.dot.is-active{background:var(--accent-2);width:18px;border-radius:3px}
+
+/* ── slide primitive ── */
+.slide{
+  min-height:100vh;min-height:100dvh;
+  padding:64px 2rem 50px;
+  display:flex;flex-direction:column;position:relative;
+  width:100%;
+  max-width:1600px;  /* 固定 1600px → 视口比这个大时，多余部分就是白边；zoom +/- 调节 */
+  margin:0 auto;
+}
+@media (max-width:1200px){
+  .slide{ padding:60px 1.2rem 50px; max-width:100%; }
+}
+
+/* ========= 封面水墨花纹（在 slide 1 内，左上角紧贴 deck-bar 下沿）========= */
+#s-org{
+  padding-top:180px;
+}
+.cover-splash{
+  display:block;
+  position:absolute;
+  top:44px;                   /* 紧贴 deck-bar 底部（44px），消除间隙 */
+  left:0;
+  width:55%;
+  max-width:920px;
+  height:auto;
+  pointer-events:none;
+  z-index:0;
+  user-select:none;
+}
+
+@media (max-width:720px){
+  #s-org{ padding-top:140px; }
+  .cover-splash{ width:90%; top:44px; }
+}
+
+/* ========= BM 比特大陆 logo (永远悬浮在最上层右下角) ========= */
+.bm-logo-fixed{
+  position:fixed;
+  bottom:20px; right:26px;
+  width:78px;             /* 控制 logo 大小，可调 */
+  height:auto;
+  pointer-events:none;
+  z-index:9999;
+  user-select:none;
+  opacity:0.88;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.08));
+}
+@media (max-width:720px){
+  .bm-logo-fixed{ width:56px; bottom:14px; right:14px; }
+}
+@media (max-width:720px){
+  .slide{padding:60px 1.2rem 50px}
+  body{font-size:13.5px}
+}
+
+.slide-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:1rem;padding-bottom:0.55rem;margin-bottom:1rem;
+  border-bottom:0.5px solid var(--rule);flex-shrink:0;
+}
+.slide-num{
+  font-family:var(--mono);font-size:0.65rem;letter-spacing:0.22em;
+  color:var(--accent-2);text-transform:uppercase;font-weight:500;
+}
+.slide-kicker{
+  font-family:var(--mono);font-size:0.62rem;letter-spacing:0.16em;
+  color:var(--ink-mute);text-transform:uppercase;
+}
+
+.key-msg{
+  font-family:var(--serif);font-weight:400;
+  font-size:clamp(1.55rem,3.2vw,2.4rem);
+  line-height:1.25;letter-spacing:-0.012em;color:var(--ink);
+  margin:0.2rem 0 0.4rem;max-width:38ch;flex-shrink:0;
+}
+.key-msg em{font-style:italic;color:var(--accent);font-weight:500}
+.key-msg b{color:var(--accent-2);font-weight:500}
+
+.point{
+  font-family:var(--serif);font-weight:300;font-style:italic;
+  font-size:clamp(1rem,1.4vw,1.15rem);line-height:1.5;
+  color:var(--ink-soft);margin:0 0 1.2rem;max-width:72ch;flex-shrink:0;
+}
+
+.slide-body{flex:1;min-height:0;display:flex;flex-direction:column}
+
+/* ───────────────────────────────── P1 · org.html iframe ───────────────────────────────── */
+.org-frame-wrap{
+  width:90%;                   /* 比满宽缩 10% */
+  aspect-ratio: 16 / 9;
+  max-height:80vh;
+  margin:0 auto;
+  background:var(--paper-2);
+  border:0.5px solid var(--rule);
+  border-radius:4px;
+  overflow:hidden;
+  position:relative;
+}
+.org-frame{
+  width:100%;height:100%;
+  border:0;display:block;background:#0e1a26;
+}
+
+.staff-card-strip{display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-bottom:1.2rem;font-family:var(--mono);font-size:0.78rem;color:var(--ink-soft)}
+.staff-card-strip span{display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.85rem;border-radius:999px;border:1px solid var(--rule);background:var(--paper)}
+.staff-card-strip .tag-good{color:var(--accent);border-color:rgba(21,104,63,0.18);background:rgba(21,104,63,0.08)}
+.staff-card-strip .tag-alert{color:var(--accent-2);border-color:rgba(197,82,58,0.16);background:rgba(197,82,58,0.08)}
+.staff-card-layout{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:1rem;align-items:stretch}
+.staff-card-sidebar{background:var(--paper);border:0.5px solid var(--rule);border-radius:18px;padding:0.75rem;display:flex;flex-direction:column;gap:0.5rem;box-shadow:0 12px 26px rgba(20,18,14,0.06)}
+.staff-card-sidebar-head{font-family:var(--mono);font-size:0.75rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink);font-weight:700}
+.staff-card-sidebar-list{list-style:none;margin:0;padding:0;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.staff-card-sidebar-list li{font-size:0.84rem;color:var(--accent);line-height:1.35;word-break:break-word}
+.staff-card-sidebar-list li::before{content:'•';margin-right:0.55rem;color:var(--accent);font-family:var(--mono);display:inline-block;width:1em;text-align:center}
+.staff-card-sidebar-list li{display:flex;align-items:flex-start;}
+@media (max-width:980px){.staff-card-layout{grid-template-columns:1fr}}
+.staff-card{background:var(--paper);border:0.5px solid var(--rule);border-radius:18px;padding:1.4rem;display:grid;gap:1.25rem;box-shadow:0 18px 36px rgba(20,18,14,0.06)}
+.staff-card-top{display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:flex-start}
+.staff-card-avatar{width:70px;height:70px;border-radius:50%;background:var(--accent);color:var(--paper);font-size:1.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(21,104,63,0.18)}
+.staff-card-title-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.staff-card-name{font-family:var(--serif);font-size:1.45rem;font-weight:600;letter-spacing:-0.01em;color:var(--ink);line-height:1.05}
+.staff-card-status{font-family:var(--mono);font-size:0.82rem;color:var(--accent);background:var(--accent-soft);border:1px solid rgba(21,104,63,0.18);border-radius:999px;padding:0.35rem 0.95rem}
+.staff-card-about{display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem;font-family:var(--sans);font-size:0.95rem;color:var(--ink-soft)}
+.staff-card-about-label{font-family:var(--mono);font-size:0.78rem;letter-spacing:0.14em;color:var(--ink);text-transform:uppercase}
+.staff-card-body{display:grid;gap:1rem}
+.staff-card-panels{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:stretch;grid-auto-rows:1fr}
+.staff-card-panel{background:var(--paper-2);border:0.5px solid var(--rule);border-radius:16px;padding:1rem;display:flex;flex-direction:column;justify-content:flex-start;gap:0.75rem;min-height:260px}
+.staff-card-panel.panel-find{background:rgba(21,104,63,0.06);border-color:rgba(21,104,63,0.14)}
+.staff-card-panel.panel-avoid{background:rgba(160,90,23,0.08);border-color:rgba(160,90,23,0.16)}
+.staff-card-panel-title{font-family:var(--mono);font-size:0.82rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink);font-weight:600}
+.staff-card-panel ul{list-style:none;margin:0;padding:0;display:grid;gap:0.55rem}
+.staff-card-panel li{font-size:0.95rem;color:var(--ink-soft);line-height:1.6;padding-left:1rem;position:relative}
+.staff-card-panel li::before{content:"•";position:absolute;left:0;top:0.14rem;color:var(--accent);font-family:var(--mono);font-size:0.95rem;line-height:1}
+.staff-card-panel.panel-avoid li::before{color:var(--amber)}
+.staff-card-panel a{color:var(--accent);text-decoration:none}
+.staff-card-panel a:hover{text-decoration:underline}
+.staff-card-prompt-panel{background:var(--paper-2);border:0.5px solid var(--rule);border-radius:16px;padding:1rem;display:grid;gap:0.75rem}
+.staff-card-prompt-panel .staff-card-panel-title{color:var(--ink)}
+.staff-card-prompt{list-style:none;margin:0;padding:0;display:grid;gap:0.55rem}
+.staff-card-prompt li{font-size:0.95rem;color:var(--ink-soft);line-height:1.65;padding:0.75rem 0.95rem;border-radius:12px;background:rgba(138,51,38,0.05);border:1px solid rgba(138,51,38,0.11)}
+.staff-card-footer{display:flex;flex-direction:column;gap:0.4rem;padding-top:0.75rem;border-top:0.5px solid var(--rule)}
+.skill-header{display:flex;align-items:center;justify-content:space-between}
+.staff-skill-summary{font-family:var(--mono);font-size:0.82rem;letter-spacing:0.1em;font-weight:600;color:var(--ink)}
+.staff-skill-score{font-size:1.1rem;font-weight:600;font-family:var(--serif);color:var(--ink);line-height:1}
+.skill-status{font-family:var(--mono);font-size:0.82rem;color:var(--accent)}
+.skill-bar{width:100%;height:8px;background:var(--rule);border-radius:999px;overflow:hidden}
+.skill-bar-fill{height:100%;width:100%;background:var(--accent);border-radius:999px}
+
+/* ───────────────────────────────── P2 · SAGE expansion ───────────────────────────────── */
+.sage-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:1rem;
+  flex:1;align-content:start;
+}
+@media (max-width:880px){.sage-grid{grid-template-columns:1fr}}
+
+.wheel{
+  background:var(--paper-2);
+  border-left:3px solid var(--accent);
+  border-top:0.5px solid var(--rule);
+  border-right:0.5px solid var(--rule);
+  border-bottom:0.5px solid var(--rule);
+  padding:1.2rem 1.4rem 1.4rem;
+  border-radius:0 4px 4px 0;
+  display:flex;flex-direction:column;
+}
+.wheel.service{border-left-color:var(--accent-2)}
+.wheel-head{
+  margin-bottom:0.85rem;
+  display:flex;align-items:baseline;justify-content:space-between;gap:0.7rem;
+  padding-bottom:0.65rem;border-bottom:0.5px solid var(--rule-fine);
+}
+.wheel-head h3{
+  margin:0;font-family:var(--serif);font-weight:500;
+  font-size:1.3rem;letter-spacing:-0.005em;
+}
+.wheel-head .tag{
+  font-family:var(--mono);font-size:0.6rem;letter-spacing:0.14em;
+  color:var(--accent);text-transform:uppercase;font-weight:500;
+}
+.wheel.service .wheel-head .tag{color:var(--accent-2)}
+
+.wheel-lead{
+  font-family:var(--serif);font-size:0.98rem;font-weight:400;font-style:italic;
+  color:var(--ink-soft);margin-bottom:0.85rem;line-height:1.55;
+}
+.wheel-lead b{color:var(--ink);font-style:normal;font-weight:600}
+
+.wheel ul{list-style:none;padding:0;margin:0}
+.wheel li{
+  display:grid;grid-template-columns:14px 1fr;gap:0.5rem;align-items:start;
+  padding:0.45rem 0;font-size:0.88rem;color:var(--ink-soft);line-height:1.6;
+  border-bottom:0.5px dashed var(--rule-fine);
+}
+.wheel li:last-child{border-bottom:0}
+.wheel li::before{content:"—";color:var(--accent);font-family:var(--mono);margin-top:0.05em}
+.wheel.service li::before{content:"—";color:var(--accent-2)}
+.wheel li b{color:var(--ink);font-weight:600}
+
+.boundary{
+  padding:0.8rem 1.1rem;
+  background:rgba(138,51,38,0.05);
+  border-left:2px solid var(--warn);border-radius:0 3px 3px 0;
+  font-size:0.85rem;color:var(--ink-soft);line-height:1.6;
+  margin-top:1rem;
+}
+.boundary .k{
+  font-family:var(--mono);font-size:0.62rem;letter-spacing:0.14em;
+  color:var(--warn);text-transform:uppercase;margin-right:0.45rem;font-weight:500;
+}
+.boundary b{color:var(--ink);font-weight:600}
+
+/* ───────────────────────────────── P3 · Lumi before/after ───────────────────────────────── */
+/* Adrian-style horizontal step flow */
+.flow-section{
+  margin-bottom:1.2rem;
+  background:var(--paper-2);
+  border:0.5px solid var(--rule);
+  border-radius:6px;
+  padding:1.1rem 1.3rem 1.3rem;
+}
+.flow-eyebrow{
+  font-family:var(--mono);font-size:0.65rem;letter-spacing:0.16em;
+  text-transform:uppercase;font-weight:500;margin-bottom:0.65rem;
+  display:flex;align-items:center;gap:0.6rem;
+}
+.flow-eyebrow.before{color:var(--ink-mute)}
+.flow-eyebrow.after{color:var(--accent)}
+.flow-eyebrow .dot-icon{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+}
+.flow-eyebrow.before .dot-icon{background:var(--rule-strong)}
+.flow-eyebrow.after .dot-icon{background:var(--accent)}
+
+.flow-row{
+  display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;
+  overflow-x:auto;
+  padding:0.5rem 0;
+}
+.flow-row::-webkit-scrollbar{height:6px}
+.flow-row::-webkit-scrollbar-track{background:var(--rule-fine);border-radius:3px}
+.flow-row::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:3px}
+
+.step{
+  flex:1 1 0;min-width:120px;
+  background:var(--gray-step);
+  border:1px solid var(--rule);
+  border-radius:10px;
+  padding:0.85rem 0.7rem 0.95rem;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;position:relative;
+  font-size:0.84rem;line-height:1.4;color:var(--ink-soft);
+  margin:0 1rem 0 0;
+}
+.step:last-child{margin-right:0}
+.step .idx{
+  font-family:var(--serif);font-style:italic;
+  font-size:0.95rem;color:var(--ink-mute);
+  margin-bottom:0.35rem;font-variant-numeric:lining-nums;
+}
+.step .label{font-weight:500;color:var(--ink)}
+.step .role{
+  margin-top:0.5rem;font-family:var(--mono);font-size:0.62rem;
+  color:var(--ink-mute);letter-spacing:0.06em;
+}
+
+/* connector arrow between steps */
+.step::after{
+  content:"›";position:absolute;
+  right:-0.95rem;top:50%;transform:translateY(-50%);
+  font-family:var(--serif);color:var(--rule-strong);
+  font-size:1rem;font-weight:400;
+  width:1rem;text-align:center;pointer-events:none;
+}
+.step:last-child::after{content:none}
+
+/* AFTER variant colors */
+.step.ai-done{
+  background:#e7f3ec;border-color:#b8d8c3;
+}
+.step.ai-done .label{color:var(--accent)}
+.step.ai-done .role{color:var(--accent);font-weight:500}
+
+.step.ai-collab{
+  background:#fef3e2;border-color:#f3d8a8;
+}
+.step.ai-collab .label{color:var(--amber)}
+.step.ai-collab .role{color:var(--amber);font-weight:500}
+
+.step.new-node{
+  background:#fef3e2;border-color:#f3d8a8;position:relative;
+}
+.step.new-node .new-flag{
+  position:absolute;top:-9px;right:-2px;
+  font-family:var(--mono);font-size:0.55rem;
+  background:var(--new-tag);color:#fff;
+  padding:1px 6px;border-radius:3px;letter-spacing:0.08em;
+  font-weight:600;
+}
+.step.unchanged{
+  background:var(--paper);border-color:var(--rule);
+  border-style:dashed;
+}
+.step.unchanged .role{font-style:italic}
+
+.flow-divider{
+  text-align:center;margin:0.4rem 0 0.6rem;
+  font-family:var(--serif);font-style:italic;
+  font-size:0.95rem;color:var(--amber);font-weight:300;
+  line-height:1.4;
+}
+.flow-divider b{color:var(--amber);font-weight:600;font-style:normal}
+
+/* branch group container — for After flow with multiple branches */
+.branch-group{
+  flex:2 1 0;
+  background:#f5fbf7;
+  border:1px dashed #b8d8c3;
+  border-radius:10px;
+  padding:0.7rem 0.7rem 0.8rem;
+  margin:0 1rem 0 0;
+  position:relative;
+}
+.branch-group::after{
+  content:"›";position:absolute;
+  right:-0.95rem;top:50%;transform:translateY(-50%);
+  font-family:var(--serif);color:var(--rule-strong);
+  font-size:1rem;width:1rem;text-align:center;
+}
+.branch-group:last-child::after{content:none}
+.branch-group-title{
+  font-family:var(--mono);font-size:0.6rem;
+  color:var(--accent);letter-spacing:0.12em;
+  text-align:center;text-transform:uppercase;
+  margin-bottom:0.5rem;font-weight:500;
+}
+.branch-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:0.35rem;
+}
+.branch-cell{
+  background:#fff;border:1px solid #d4e6dc;border-radius:6px;
+  padding:0.4rem 0.35rem 0.5rem;text-align:center;
+  font-size:0.72rem;line-height:1.3;color:var(--ink-soft);
+}
+.branch-cell .b-label{font-weight:500;color:var(--accent);margin-bottom:0.15rem;font-size:0.74rem}
+.branch-cell .b-out{color:var(--ink-mute);font-size:0.68rem}
+
+/* qualitative table — no numbers */
+.qual-table{
+  width:100%;border-collapse:collapse;font-size:0.83rem;
+  margin-top:0.5rem;
+}
+.qual-table th{
+  text-align:left;font-family:var(--mono);font-size:0.6rem;
+  letter-spacing:0.12em;color:var(--ink-mute);text-transform:uppercase;
+  padding:0.5rem 0.65rem;border-bottom:0.5px solid var(--rule-strong);
+  font-weight:500;
+}
+.qual-table td{
+  padding:0.55rem 0.65rem;border-bottom:0.5px dashed var(--rule-fine);
+  color:var(--ink-soft);vertical-align:top;line-height:1.55;
+}
+.qual-table td.proc{font-weight:500;color:var(--ink);width:18%}
+.qual-table td.save{color:var(--accent);font-weight:500}
+.qual-table td.save b{color:var(--accent);font-weight:600}
+
+/* honest limitations card */
+.honest{
+  margin-top:1rem;
+  background:#fff8f3;border:1px solid #f3d8a8;border-radius:6px;
+  padding:0.95rem 1.2rem 1.1rem;
+}
+.honest h4{
+  margin:0 0 0.5rem;font-family:var(--serif);font-weight:500;
+  font-size:1.02rem;letter-spacing:-0.005em;color:var(--amber);
+  display:flex;align-items:center;gap:0.5rem;
+}
+.honest h4 .icon{
+  font-family:var(--mono);font-size:0.62rem;letter-spacing:0.16em;
+  background:var(--amber);color:#fff;padding:2px 7px;border-radius:2px;
+  text-transform:uppercase;font-weight:600;
+}
+.honest ul{margin:0;padding-left:1.2rem;font-size:0.85rem;color:var(--ink-soft);line-height:1.65}
+.honest li{margin-bottom:0.25rem}
+.honest li b{color:var(--ink);font-weight:600}
+
+/* ───────────────────────────────── P4 · Adrian flow · inline scoped ───────────────────────────────── */
+.adrian-scope{
+  flex:1;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  line-height:1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.adrian-scope .container{ max-width:none !important; padding:24px 28px !important; }
+.adrian-scope .hero{ padding:8px 0 28px !important; }
+.adrian-scope .hero h1{ font-size:26px !important; }
+.adrian-scope .hero .subtitle{ font-size:15px !important; }
+
+/* ── Adrian v3 flow CSS (scoped under .adrian-scope) ── */
+.adrian-scope *{ box-sizing: border-box; margin: 0; padding: 0; }.adrian-scope{
+    --bg:        #ffffff;
+    --bg-grad:   #ffffff;
+    --surface:   #ffffff;
+    --surface-2: #fbfaf6;
+    --ink:       #0d0d0d;
+    --ink-soft:  #2c2c2c;
+    --ink-muted: #6b6b6b;
+    --muted:     #9a958c;
+    --rule:      #e6e3dc;
+    --rule-strong: #c9c4b7;
+    --accent:    #0f5b5b;
+    --accent-soft: rgba(15, 91, 91, 0.08);
+    --amber:     #a05a17;
+    --amber-soft: #f5ead8;
+    --good:      #15683f;
+    --good-soft: #dff0e4;
+    --warn:      #9b3838;
+  }.adrian-scope{
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg-grad);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }.adrian-scope .serif{ font-family: "Newsreader", "Noto Serif SC", Georgia, serif; }.adrian-scope .italic{ font-style: italic; }.adrian-scope .container{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 56px 32px 80px;
+  }/* ============ Lumi-style section ============ */ .adrian-scope .lumi-section{ margin: 0 0 56px; }.adrian-scope .lumi-h{
+    font-family: "Newsreader", "Noto Serif SC", Georgia, serif;
+    font-size: 44px;
+    font-weight: 500;
+    line-height: 1.22;
+    letter-spacing: -0.4px;
+    color: var(--ink);
+    margin-bottom: 18px;
+  }.adrian-scope .lumi-h em{ font-style: italic; color: var(--good); font-weight: 500; }.adrian-scope .lumi-h .dash{ color: var(--muted); font-weight: 400; }.adrian-scope .lumi-intro{
+    font-family: "Newsreader", "Noto Serif SC", Georgia, serif;
+    font-style: italic;
+    font-size: 17.5px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+    max-width: 780px;
+    margin-bottom: 36px;
+  }/* Adrian section: 让 NEW 角标能溢出显示，覆盖全局 .flow-row 的 overflow-x:auto */
+  .adrian-scope .flow-row { overflow: visible !important; }
+  .adrian-scope .flow-block { overflow: visible; }
+  /* Block (Before / After panels) */ .adrian-scope .flow-block{
+    border-radius: 18px;
+    padding: 26px 24px 28px;
+  }.adrian-scope .flow-block-before{ background: rgba(154, 149, 140, 0.12); border: 1px solid var(--rule); }.adrian-scope .flow-block-after{ background: rgba(21, 104, 63, 0.13); border: 1px solid rgba(21, 104, 63, 0.22); }.adrian-scope .block-label{
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }.adrian-scope .block-label::before{
+    content: "";
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    display: inline-block;
+  }.adrian-scope .flow-block-after .block-label::before{ background: var(--good); }/* Flow row of cards */ .adrian-scope .flow-row{
+    display: grid;
+    gap: 0;
+    align-items: stretch;
+  }/* 用同一套 6 列网格 → BEFORE 3 张卡用 span-2/3/1 匹配 AFTER 的 1/2 → 3/4/5 → 6 */ .adrian-scope .flow-row.cols-6{ grid-template-columns: repeat(6, 1fr); column-gap: 16px; }.adrian-scope .flow-row .span-2{ grid-column: span 2; }.adrian-scope .flow-row .span-3{ grid-column: span 3; }.adrian-scope .flow-row .span-1{ grid-column: span 1; }.adrian-scope .flow-card{
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 18px 10px 16px;
+    text-align: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }.adrian-scope .flow-card .card-num{
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 18px;
+    color: var(--ink-muted);
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1;
+  }.adrian-scope .flow-card .card-name{
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.25;
+  }.adrian-scope .flow-card .card-desc{
+    font-size: 11px;
+    color: var(--ink-muted);
+    line-height: 1.4;
+    margin-top: -2px;
+    font-style: italic;
+    font-family: "Newsreader", "Noto Serif SC", Georgia, serif;
+  }.adrian-scope .flow-card .card-tag{
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 0.3px;
+    margin-top: auto;
+  }.adrian-scope /* Arrows between cards (using ::after pseudo, .adrian-scope sitting in column gap) */
+  .flow-row .flow-card:not(:last-child)::after{
+    content: "›";
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
+  }.adrian-scope .flow-block-before .flow-card:not(:last-child)::after{ color: var(--muted); }.adrian-scope .flow-block-after  .flow-card:not(:last-child)::after{ color: var(--good); }/* Before variant — cream-white cards on gray panel */ .adrian-scope .flow-card-manual{
+    background: #fefdf9;
+    border-color: var(--rule);
+  }.adrian-scope .flow-card-manual .card-name{ color: var(--ink-soft); }/* After variants — light cards "floating" on green panel */ .adrian-scope .flow-card-ai{
+    background: #f6faf2;                    /* 几乎白，带极浅薄荷 */
+    border-color: rgba(21, 104, 63, 0.35);
+  }.adrian-scope .flow-card-ai .card-tag{ color: var(--good); font-weight: 600; }.adrian-scope .flow-card-collab{
+    background: #f8f1e5;                    /* 浅米琥珀 */
+    border-color: rgba(160, 90, 23, 0.40);
+  }.adrian-scope .flow-card-collab .card-tag{ color: var(--amber); font-weight: 600; }.adrian-scope .flow-card-new{
+    background: #FFF1D9;                    /* 暖底 */
+    border-color: var(--amber);
+  }.adrian-scope .flow-card-new .card-tag{ color: var(--amber); font-weight: 700; }.adrian-scope .flow-card-new::before{
+    content: "NEW";
+    position: absolute;
+    top: -8px; right: -6px;
+    background: var(--amber);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    z-index: 2;
+  }.adrian-scope .flow-card-same{
+    background: #f4f2ec;                    /* 浅米灰，明显区别绿底 */
+    border-color: var(--rule-strong);
+    opacity: 0.95;
+  }.adrian-scope .flow-card-same .card-name{ color: var(--ink-muted); }.adrian-scope .flow-card-same .card-tag{ color: var(--muted); }/* Transition line between Before / After */ .adrian-scope .transition-line{
+    text-align: center;
+    font-family: "Newsreader", "Noto Serif SC", Georgia, serif;
+    font-style: italic;
+    font-size: 15.5px;
+    color: var(--ink-muted);
+    margin: 22px 0;
+    padding: 0 16px;
+  }.adrian-scope .transition-line b{
+    font-style: italic;
+    color: var(--amber);
+    font-weight: 500;
+  }/* Comparison table */ .adrian-scope .compare-wrap{ margin-top: 44px; }.adrian-scope .compare-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }.adrian-scope .compare-table th{
+    text-align: left;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--rule-strong);
+    vertical-align: bottom;
+  }.adrian-scope .compare-table th.th-savings{ color: var(--good); }.adrian-scope .compare-table td{
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }.adrian-scope .compare-table tr:last-child td{ border-bottom: 0; }.adrian-scope .compare-table td:first-child{
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 14.5px;
+    white-space: nowrap;
+  }.adrian-scope .compare-table td.td-savings{ color: var(--good); font-weight: 500; }.adrian-scope .compare-table tr:hover td{ background: rgba(15, 91, 91, 0.025); }/* ============ 诚实地说 (bottom — 整体收敛、降低视觉权重) ============ */ .adrian-scope .honest-block{
+    margin-top: 48px;
+    background: var(--amber-soft);           /* Lumi 同款暖米琥珀底 #f5ead8 */
+    border: 1px solid rgba(160, 90, 23, 0.18);
+    border-radius: 10px;
+    padding: 18px 20px 16px;
+  }.adrian-scope .honest-head{
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }.adrian-scope .honest-tag{
+    display: inline-block;
+    background: var(--amber);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 3px 9px;
+    border-radius: 3px;
+  }.adrian-scope .honest-head h3{
+    font-size: 13.5px;                       /* 从 22px 衬线大字 → 13.5px 普通字重 */
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.3;
+    letter-spacing: 0.1px;
+  }.adrian-scope .honest-list{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }.adrian-scope .honest-list li{
+    position: relative;
+    padding: 7px 0 7px 18px;
+    font-size: 12.5px;                       /* 从 14px → 12.5px */
+    line-height: 1.6;
+    color: var(--ink-muted);                 /* 用 muted，整体降级 */
+    border-top: 1px dashed var(--rule);
+  }.adrian-scope .honest-list li:first-child{ border-top: 0; padding-top: 4px; }.adrian-scope .honest-list li::before{
+    content: "●";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    color: var(--muted);                     /* dot 也降为浅灰 */
+    font-size: 6px;
+  }.adrian-scope .honest-list li:first-child::before{ top: 6px; }.adrian-scope .honest-list li b{
+    color: var(--ink-soft);
+    font-weight: 600;
+  }/* Footer */ .adrian-scope .footer{
+    margin-top: 48px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.4px;
+  }@media (max-width: 900px) {.adrian-scope .container{ padding: 36px 18px 60px; }.adrian-scope .hero h1, .adrian-scope .lumi-h{ font-size: 32px; }.adrian-scope .lumi-intro{ font-size: 16px; }.adrian-scope .kpi-grid{ grid-template-columns: 1fr; }.adrian-scope .flow-row.cols-4, .adrian-scope .flow-row.cols-7{
+      display: flex;
+      overflow-x: auto;
+      column-gap: 12px;
+      padding-bottom: 8px;
+      scroll-snap-type: x mandatory;
+    }.adrian-scope .flow-row .flow-card{
+      flex: 0 0 150px;
+      min-width: 150px;
+      scroll-snap-align: start;
+    }.adrian-scope .compare-table{ font-size: 13px; }.adrian-scope .compare-table th, .adrian-scope .compare-table td{ padding: 10px 8px; }
+  }
+
+
+/* print */
+@media print{
+  html{scroll-snap-type:none}
+  body{background:white}
+  .deck-bar,.deck-foot{display:none}
+  .slide{page-break-after:always;min-height:auto;padding:1cm;max-width:none}
+}
+
+/* entry anim 已砍掉 — 内容直接呈现，避免每次翻页闪动 */
+
+/* ── §02 · AI in AA Org · diptych + panels + takeaway ── */
+/* diptych — Before vs After */
+.diptych{
+  flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1rem;
+  min-height:0;
+}
+@media (max-width:980px){.diptych{grid-template-columns:1fr;gap:0.9rem}}
+
+.panel{
+  display:flex;flex-direction:column;
+  background:var(--paper-2);
+  border:0.5px solid var(--rule);
+  border-radius:6px;overflow:hidden;
+}
+.panel.before{background:#f6f4ef}
+.panel.after{background:#f6fbf8;border-color:#cfe5d8}
+
+.panel-head{
+  display:flex;align-items:center;gap:0.6rem;
+  padding:0.85rem 1.1rem 0.7rem;
+  border-bottom:0.5px solid var(--rule-fine);
+}
+.panel-head .dot-icon{width:8px;height:8px;border-radius:50%}
+.panel.before .dot-icon{background:var(--rule-strong)}
+.panel.after .dot-icon{background:var(--accent)}
+.panel-eye{
+  font-family:var(--mono);font-size:0.65rem;letter-spacing:0.16em;
+  text-transform:uppercase;font-weight:500;
+}
+.panel.before .panel-eye{color:var(--ink-mute)}
+.panel.after .panel-eye{color:var(--accent)}
+.panel-title{
+  font-family:var(--serif);font-weight:500;font-size:1.05rem;
+  letter-spacing:-0.005em;color:var(--ink);margin-left:auto;
+}
+
+.panel-svg-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:0.5rem 0.6rem;
+  min-height:340px;
+}
+.panel-svg-wrap svg{width:100%;height:auto;max-height:420px;display:block}
+
+.panel-notes{
+  padding:0.7rem 1.1rem 0.95rem;
+  border-top:0.5px dashed var(--rule-fine);
+  font-size:0.82rem;color:var(--ink-soft);line-height:1.55;
+}
+.panel-notes ul{margin:0;padding-left:1rem}
+.panel-notes li{margin-bottom:0.2rem}
+.panel-notes li b{color:var(--ink);font-weight:600}
+.panel.after .panel-notes li b{color:var(--accent)}
+
+/* takeaway strip at bottom */
+.takeaway{
+  margin-top:0.9rem;
+  background:var(--ink);color:var(--paper);
+  padding:0.85rem 1.2rem;border-radius:4px;
+  display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;
+  font-size:0.84rem;line-height:1.55;
+}
+@media (max-width:720px){.takeaway{grid-template-columns:1fr;gap:0.5rem}}
+.takeaway > div{display:flex;gap:0.7rem;align-items:flex-start}
+.takeaway .label{
+  font-family:var(--mono);font-size:0.6rem;letter-spacing:0.18em;
+  color:#f5b9aa;text-transform:uppercase;font-weight:500;
+  white-space:nowrap;padding-top:0.1rem;
+}
+.takeaway .text b{color:#f5b9aa;font-weight:500}
+</style>
+</head>
+<body>
+<img class="bm-logo-fixed" src="bitmain-logo.png" alt="比特大陆 BITMAIN" />
+
+<!-- top bar -->
+<header class="deck-bar">
+  <div class="brand">AA <span>·</span> 组织架构及工作流调整</div>
+  <div class="center" id="bar-title">组织架构</div>
+  <div class="right"><span class="cnt" id="bar-cnt">1</span> / 4</div>
+</header>
+
+
+<!-- ╔════════════════════════════════════════════════╗ -->
+<!-- ║  PAGE 1 · 组织架构（org.html 原样嵌入）         ║ -->
+<!-- ╚════════════════════════════════════════════════╝ -->
+<section class="slide" id="s-org" data-name="组织架构">
+  <img class="cover-splash" src="cover-splash.png" alt="" aria-hidden="true" />
+  <div class="slide-head">
+    <div class="slide-num">01 · 组织架构</div>
+    <div class="slide-kicker">RaaS · Result-as-a-Service</div>
+  </div>
+
+  <h2 class="key-msg">以 AI 为中心的<em>组织架构</em></h2>
+
+  <div class="slide-body">
+    <div class="org-frame-wrap">
+      <iframe class="org-frame"
+              src="data:text/html;charset=utf-8;base64,PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9InpoLUNOIj4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0iVVRGLTgiIC8+CiAgPG1ldGEgbmFtZT0idmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCwgaW5pdGlhbC1zY2FsZT0xLjAiIC8+CiAgPHRpdGxlPkFJIOe7hOe7h+aetuaehCDCtyDku6UgQUkg5Li65Lit5b+D55qEIFJhYVMg5pyN5Yqh5qih5byPPC90aXRsZT4KICA8c3R5bGU+CiAgICA6cm9vdCB7CiAgICAgIC8qIEJlaWdlIHBhbGV0dGUgKGFsaWduZWQgd2l0aCBhZ2VudHMuaHRtbCkgKi8KICAgICAgLS1iZy0wOiAjZjZmNGVmOwogICAgICAtLWJnLTE6ICNmM2YxZWE7CiAgICAgIC0tYmctMjogI2VjZThkZDsKICAgICAgLS1pbmstMDogIzBkMGQwZDsKICAgICAgLS1pbmstMTogcmdiYSgxMywgMTMsIDEzLCAwLjg0KTsKICAgICAgLS1pbmstMjogcmdiYSgxMywgMTMsIDEzLCAwLjYwKTsKICAgICAgLS1pbmstMzogcmdiYSgxMywgMTMsIDEzLCAwLjM2KTsKICAgICAgLS1saW5lOiByZ2JhKDEzLCAxMywgMTMsIDAuMTQpOwogICAgICAtLWxpbmUtc3Ryb25nOiByZ2JhKDEzLCAxMywgMTMsIDAuMjIpOwogICAgICAtLXRlYWw6ICMwZjViNWI7CiAgICAgIC0tdGVhbC1zb2Z0OiByZ2JhKDE1LCA5MSwgOTEsIDAuMTApOwogICAgICAtLWFtYmVyOiAjYTA1YTE3OwogICAgICAtLWFtYmVyLXNvZnQ6IHJnYmEoMTYwLCA5MCwgMjMsIDAuMTIpOwogICAgICAtLWNyZWFtOiAjZmJmYWY2OwogICAgICAtLXU6IG1pbigxdmgsIDAuNTYyNXZ3KTsKICAgIH0KCiAgICAqIHsgYm94LXNpemluZzogYm9yZGVyLWJveDsgbWFyZ2luOiAwOyBwYWRkaW5nOiAwOyB9CgogICAgaHRtbCwgYm9keSB7CiAgICAgIHdpZHRoOiAxMDAlOwogICAgICBoZWlnaHQ6IDEwMCU7CiAgICAgIGZvbnQtZmFtaWx5OiAiUGluZ0ZhbmcgU0MiLCAiSGlyYWdpbm8gU2FucyBHQiIsICJNaWNyb3NvZnQgWWFIZWkiLCBzeXN0ZW0tdWksIHNhbnMtc2VyaWY7CiAgICAgIGNvbG9yOiB2YXIoLS1pbmstMCk7CiAgICAgIGJhY2tncm91bmQ6IHZhcigtLWJnLTApOwogICAgICBvdmVyZmxvdzogaGlkZGVuOwogICAgICAtd2Via2l0LWZvbnQtc21vb3RoaW5nOiBhbnRpYWxpYXNlZDsKICAgIH0KCiAgICBib2R5IHsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICAgICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICAgIGJhY2tncm91bmQ6CiAgICAgICAgcmFkaWFsLWdyYWRpZW50KGVsbGlwc2UgNDYlIDM2JSBhdCAxNCUgNTIlLCByZ2JhKDE2MCwgOTAsIDIzLCAwLjA1KSwgdHJhbnNwYXJlbnQgNzAlKSwKICAgICAgICByYWRpYWwtZ3JhZGllbnQoZWxsaXBzZSA2NiUgMzglIGF0IDU2JSA1MCUsIHJnYmEoMTUsIDkxLCA5MSwgMC4wNSksIHRyYW5zcGFyZW50IDcwJSksCiAgICAgICAgcmFkaWFsLWdyYWRpZW50KGNpcmNsZSwgcmdiYSgxMywgMTMsIDEzLCAwLjA1KSAwIDFweCwgdHJhbnNwYXJlbnQgMXB4IDEwMCUpIDAgMCAvIDM2cHggMzZweCwKICAgICAgICBsaW5lYXItZ3JhZGllbnQoMTgwZGVnLCB2YXIoLS1iZy0wKSAwJSwgdmFyKC0tYmctMSkgNTAlLCB2YXIoLS1iZy0yKSAxMDAlKTsKICAgIH0KCiAgICBib2R5OjpiZWZvcmUgewogICAgICBjb250ZW50OiAiIjsKICAgICAgcG9zaXRpb246IGZpeGVkOwogICAgICBpbnNldDogMDsKICAgICAgcG9pbnRlci1ldmVudHM6IG5vbmU7CiAgICAgIGJhY2tncm91bmQ6CiAgICAgICAgbGluZWFyLWdyYWRpZW50KDE4MGRlZywgcmdiYSgxMywgMTMsIDEzLCAwLjA1KSwgdHJhbnNwYXJlbnQgMTglLCB0cmFuc3BhcmVudCA4MiUsIHJnYmEoMTMsIDEzLCAxMywgMC4wNSkpLAogICAgICAgIGxpbmVhci1ncmFkaWVudCg5MGRlZywgcmdiYSgxMywgMTMsIDEzLCAwLjA0KSwgdHJhbnNwYXJlbnQgMTQlLCB0cmFuc3BhcmVudCA4NiUsIHJnYmEoMTMsIDEzLCAxMywgMC4wNCkpOwogICAgfQoKICAgIC5kZWNrIHsKICAgICAgcG9zaXRpb246IHJlbGF0aXZlOwogICAgICB3aWR0aDogY2FsYygxNzcuNzc3OCAqIHZhcigtLXUpKTsKICAgICAgaGVpZ2h0OiBjYWxjKDEwMCAqIHZhcigtLXUpKTsKICAgICAgZGlzcGxheTogZ3JpZDsKICAgICAgZ3JpZC10ZW1wbGF0ZS1yb3dzOiBhdXRvIDFmciBhdXRvOwogICAgICBnYXA6IGNhbGMoMS40ICogdmFyKC0tdSkpOwogICAgICBwYWRkaW5nOiBjYWxjKDIuMiAqIHZhcigtLXUpKSBjYWxjKDYgKiB2YXIoLS11KSkgY2FsYygyLjQgKiB2YXIoLS11KSk7CiAgICAgIHotaW5kZXg6IDE7CiAgICB9CgogICAgLyog4pSA4pSA4pSA4pSA4pSA4pSAIEhlYWRlciDilIDilIDilIDilIDilIDilIAgKi8KICAgIC5kZWNrLWhlYWRlciB7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGFsaWduLWl0ZW1zOiBiYXNlbGluZTsKICAgICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICAgIHBhZGRpbmctYm90dG9tOiBjYWxjKDAuNiAqIHZhcigtLXUpKTsKICAgIH0KCiAgICAuZGVjay10aXRsZSB7CiAgICAgIHdpZHRoOiAxMDAlOwogICAgICBmb250LXNpemU6IGNhbGMoMy45ICogdmFyKC0tdSkpOwogICAgICBmb250LXdlaWdodDogNzAwOwogICAgICBsZXR0ZXItc3BhY2luZzogMC4wMmVtOwogICAgICBsaW5lLWhlaWdodDogMS4xNjsKICAgICAgY29sb3I6IHZhcigtLWluay0wKTsKICAgICAgdGV4dC1hbGlnbjogY2VudGVyOwogICAgfQoKICAgIC5kZWNrLXRpdGxlIGVtIHsKICAgICAgZm9udC1zdHlsZTogbm9ybWFsOwogICAgICBjb2xvcjogdmFyKC0tdGVhbCk7CiAgICAgIGZvbnQtd2VpZ2h0OiA2MDA7CiAgICB9CgogICAgLyog4pSA4pSA4pSA4pSA4pSA4pSAIFN0YWdlIOKUgOKUgOKUgOKUgOKUgOKUgCAqLwogICAgLnN0YWdlIHsKICAgICAgcG9zaXRpb246IHJlbGF0aXZlOwogICAgICBkaXNwbGF5OiBncmlkOwogICAgICBncmlkLXRlbXBsYXRlLWNvbHVtbnM6IG1pbm1heCgwLCBjYWxjKDEyMiAqIHZhcigtLXUpKSkgY2FsYygzNCAqIHZhcigtLXUpKTsKICAgICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICAgIGdhcDogY2FsYygyLjQgKiB2YXIoLS11KSk7CiAgICAgIG1pbi1oZWlnaHQ6IDA7CiAgICAgIHBhZGRpbmc6IGNhbGMoMi44ICogdmFyKC0tdSkpIGNhbGMoMy40ICogdmFyKC0tdSkpIGNhbGMoMi42ICogdmFyKC0tdSkpOwogICAgICBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1saW5lLXN0cm9uZyk7CiAgICAgIGJvcmRlci1yYWRpdXM6IDk5OTlweDsKICAgICAgYmFja2dyb3VuZDogcmdiYSgyNTUsIDI1NSwgMjU1LCAwLjQwKTsKICAgICAgb3ZlcmZsb3c6IGhpZGRlbjsKICAgIH0KCiAgICAuc3RhZ2U6OmJlZm9yZSB7CiAgICAgIGNvbnRlbnQ6ICIiOwogICAgICBwb3NpdGlvbjogYWJzb2x1dGU7CiAgICAgIGluc2V0OiAwOwogICAgICBib3JkZXItcmFkaXVzOiBpbmhlcml0OwogICAgICBiYWNrZ3JvdW5kOgogICAgICAgIHJhZGlhbC1ncmFkaWVudChjaXJjbGUsIHJnYmEoMTMsIDEzLCAxMywgMC4wNDUpIDAgMXB4LCB0cmFuc3BhcmVudCAxcHggMTAwJSkgMCAwIC8gY2FsYygzLjYgKiB2YXIoLS11KSkgY2FsYygzLjYgKiB2YXIoLS11KSk7CiAgICAgIG9wYWNpdHk6IDAuNzsKICAgICAgcG9pbnRlci1ldmVudHM6IG5vbmU7CiAgICAgIHotaW5kZXg6IDA7CiAgICB9CgogICAgLyog4pSA4pSA4pSA4pSA4pSA4pSAIERpYWdyYW0g4pSA4pSA4pSA4pSA4pSA4pSAICovCiAgICAuZGlhZ3JhbSB7CiAgICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgICAgbWluLWhlaWdodDogMDsKICAgICAgd2lkdGg6IDEwMCU7CiAgICAgIG1heC13aWR0aDogY2FsYygxMjIgKiB2YXIoLS11KSk7CiAgICAgIGp1c3RpZnktc2VsZjogY2VudGVyOwogICAgICB6LWluZGV4OiAxOwogICAgfQoKICAgIC5zaWRlYmFyIHsgei1pbmRleDogMTsgfQoKICAgIC8qIFBpbGxzICovCiAgICAucGlsbCB7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGFsaWduLWl0ZW1zOiBzdHJldGNoOwogICAgICBib3JkZXItcmFkaXVzOiA5OTk5cHg7CiAgICAgIGJvcmRlcjogMXB4IHNvbGlkOwogICAgICBwb3NpdGlvbjogcmVsYXRpdmU7CiAgICB9CgogICAgLnBpbGwtb3V0ZXIgewogICAgICB3aWR0aDogMTAwJTsKICAgICAgaGVpZ2h0OiAxMDAlOwogICAgICBwYWRkaW5nOiAwIGNhbGMoMy4yICogdmFyKC0tdSkpIDAgY2FsYygyLjYgKiB2YXIoLS11KSk7CiAgICAgIGdhcDogY2FsYygyLjQgKiB2YXIoLS11KSk7CiAgICAgIGJhY2tncm91bmQ6IGxpbmVhci1ncmFkaWVudCgxODBkZWcsICNmZmZmZmYsICNmYmZhZjYpOwogICAgICBib3JkZXItY29sb3I6IHJnYmEoMTMsIDEzLCAxMywgMC4xNik7CiAgICB9CgogICAgLnBpbGwtc2VydmljZSB7CiAgICAgIGZsZXg6IDAgMSA3NCU7CiAgICAgIG1hcmdpbjogY2FsYyg0LjQgKiB2YXIoLS11KSkgMDsKICAgICAgcGFkZGluZzogMCBjYWxjKDIuOCAqIHZhcigtLXUpKSAwIGNhbGMoMi4yICogdmFyKC0tdSkpOwogICAgICBnYXA6IGNhbGMoMi4yICogdmFyKC0tdSkpOwogICAgICBtaW4td2lkdGg6IDA7CiAgICAgIGJhY2tncm91bmQ6IGxpbmVhci1ncmFkaWVudCgxODBkZWcsIHJnYmEoMTUsIDkxLCA5MSwgMC4wNiksIHJnYmEoMTUsIDkxLCA5MSwgMC4wMykpOwogICAgICBib3JkZXItY29sb3I6IHJnYmEoMTUsIDkxLCA5MSwgMC4yMik7CiAgICB9CgogICAgLnBpbGwtZXhwZXJ0IHsKICAgICAgZmxleDogMCAxIDYwJTsKICAgICAgbWFyZ2luOiBjYWxjKDQuOCAqIHZhcigtLXUpKSAwOwogICAgICBwYWRkaW5nOiAwIGNhbGMoMi40ICogdmFyKC0tdSkpIDAgY2FsYygxLjggKiB2YXIoLS11KSk7CiAgICAgIGdhcDogY2FsYygxLjggKiB2YXIoLS11KSk7CiAgICAgIG1pbi13aWR0aDogMDsKICAgICAgYmFja2dyb3VuZDogbGluZWFyLWdyYWRpZW50KDE4MGRlZywgcmdiYSgxNSwgOTEsIDkxLCAwLjEyKSwgcmdiYSgxNSwgOTEsIDkxLCAwLjA3KSk7CiAgICAgIGJvcmRlci1jb2xvcjogcmdiYSgxNSwgOTEsIDkxLCAwLjMyKTsKICAgIH0KCiAgICAucGlsbC1jb3JlIHsKICAgICAgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsKICAgICAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICAgICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICAgIHdpZHRoOiBjYWxjKDE3ICogdmFyKC0tdSkpOwogICAgICBoZWlnaHQ6IGNhbGMoMTcgKiB2YXIoLS11KSk7CiAgICAgIGJvcmRlci1yYWRpdXM6IDUwJTsKICAgICAgZmxleC1zaHJpbms6IDA7CiAgICAgIGFsaWduLXNlbGY6IGNlbnRlcjsKICAgICAgYmFja2dyb3VuZDogcmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCAzNSUgMzglLCAjMWE3MzczLCAjMGEzYTNhIDcyJSk7CiAgICAgIGJvcmRlci1jb2xvcjogcmdiYSgxNjAsIDkwLCAyMywgMC41NSk7CiAgICAgIGJveC1zaGFkb3c6CiAgICAgICAgaW5zZXQgMCAwIDI0cHggcmdiYSgxNjAsIDkwLCAyMywgMC4yMCksCiAgICAgICAgMCAwIDM2cHggcmdiYSgxNjAsIDkwLCAyMywgMC4xNik7CiAgICAgIGdhcDogY2FsYygwLjUgKiB2YXIoLS11KSk7CiAgICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgIH0KCiAgICAucGlsbC1jb3JlOjphZnRlciB7CiAgICAgIGNvbnRlbnQ6ICIiOwogICAgICBwb3NpdGlvbjogYWJzb2x1dGU7CiAgICAgIGluc2V0OiAtMnB4OwogICAgICBib3JkZXItcmFkaXVzOiA1MCU7CiAgICAgIGJhY2tncm91bmQ6IHJhZGlhbC1ncmFkaWVudChjaXJjbGUgYXQgNTAlIDUwJSwgcmdiYSgxNjAsIDkwLCAyMywgMC4yOCksIHRyYW5zcGFyZW50IDY1JSk7CiAgICAgIHBvaW50ZXItZXZlbnRzOiBub25lOwogICAgICBhbmltYXRpb246IGNvcmUtcHVsc2UgNC44cyBlYXNlLWluLW91dCBpbmZpbml0ZTsKICAgIH0KCiAgICAuY29yZS10aXRsZSB7CiAgICAgIGZvbnQtc2l6ZTogY2FsYygyLjYgKiB2YXIoLS11KSk7CiAgICAgIGZvbnQtd2VpZ2h0OiA3MDA7CiAgICAgIGxldHRlci1zcGFjaW5nOiAwLjA2ZW07CiAgICAgIGNvbG9yOiB2YXIoLS1jcmVhbSk7CiAgICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgICAgei1pbmRleDogMjsKICAgIH0KCiAgICAuY29yZS1pdGVtcyB7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7CiAgICAgIGdhcDogY2FsYygwLjIgKiB2YXIoLS11KSk7CiAgICAgIG1hcmdpbi10b3A6IGNhbGMoMC40ICogdmFyKC0tdSkpOwogICAgICBmb250LXNpemU6IGNhbGMoMS43NSAqIHZhcigtLXUpKTsKICAgICAgY29sb3I6IHJnYmEoMjUxLCAyNTAsIDI0NiwgMC44NCk7CiAgICAgIGxldHRlci1zcGFjaW5nOiAwLjJlbTsKICAgICAgcG9zaXRpb246IHJlbGF0aXZlOwogICAgICB6LWluZGV4OiAyOwogICAgfQoKICAgIEBrZXlmcmFtZXMgY29yZS1wdWxzZSB7CiAgICAgIDAlLCAxMDAlIHsgb3BhY2l0eTogMC41NTsgfQogICAgICA1MCUgICAgICB7IG9wYWNpdHk6IDE7IH0KICAgIH0KCiAgICAvKiBMYXllciB0ZXh0IGluc2lkZSBwaWxscyAqLwogICAgLmxheWVyLXRleHQgewogICAgICBmbGV4LXNocmluazogMDsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsKICAgICAganVzdGlmeS1jb250ZW50OiBmbGV4LXN0YXJ0OwogICAgICBwYWRkaW5nOiBjYWxjKDEuNiAqIHZhcigtLXUpKSAwOwogICAgICBnYXA6IGNhbGMoMC41ICogdmFyKC0tdSkpOwogICAgfQoKICAgIC5idXNpbmVzcy10ZXh0IHsKICAgICAgd2lkdGg6IGNhbGMoMTkgKiB2YXIoLS11KSk7CiAgICAgIGFsaWduLWl0ZW1zOiBmbGV4LXN0YXJ0OwogICAgICBwYWRkaW5nLXRvcDogY2FsYygyNC4yICogdmFyKC0tdSkpOwogICAgICB0ZXh0LWFsaWduOiBsZWZ0OwogICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoY2FsYygxLjIgKiB2YXIoLS11KSkpOwogICAgfQoKICAgIC5idXNpbmVzcy10ZXh0IC5sYXllci1saXN0IHsKICAgICAgYWxpZ24tc2VsZjogZmxleC1zdGFydDsKICAgIH0KCiAgICAuc2VydmljZS10ZXh0IHsKICAgICAgd2lkdGg6IGNhbGMoMjYgKiB2YXIoLS11KSk7CiAgICAgIHBhZGRpbmctdG9wOiBjYWxjKDE5LjggKiB2YXIoLS11KSk7CiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWChjYWxjKDEuMiAqIHZhcigtLXUpKSk7CiAgICB9CgogICAgLmV4cGVydC10ZXh0IHsKICAgICAgd2lkdGg6IGNhbGMoMTggKiB2YXIoLS11KSk7CiAgICAgIHBhZGRpbmctdG9wOiBjYWxjKDE1ICogdmFyKC0tdSkpOwogICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoY2FsYygxLjIgKiB2YXIoLS11KSkpOwogICAgfQoKICAgIC5sYXllci10aXRsZSB7CiAgICAgIGZvbnQtc2l6ZTogY2FsYygyLjU1ICogdmFyKC0tdSkpOwogICAgICBmb250LXdlaWdodDogNzAwOwogICAgICBsaW5lLWhlaWdodDogMS4xODsKICAgICAgY29sb3I6IHZhcigtLWluay0wKTsKICAgIH0KCiAgICAubGF5ZXItc3ViIHsKICAgICAgZm9udC1zaXplOiBjYWxjKDEuNTUgKiB2YXIoLS11KSk7CiAgICAgIGZvbnQtd2VpZ2h0OiA0MDA7CiAgICAgIGNvbG9yOiB2YXIoLS1pbmstMik7CiAgICAgIGxldHRlci1zcGFjaW5nOiAwLjAyZW07CiAgICAgIGxpbmUtaGVpZ2h0OiAxLjQ7CiAgICB9CgogICAgLmxheWVyLWxpc3QgewogICAgICBsaXN0LXN0eWxlOiBub25lOwogICAgICBtYXJnaW4tdG9wOiBjYWxjKDAuNCAqIHZhcigtLXUpKTsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsKICAgICAgZ2FwOiBjYWxjKDAuNiAqIHZhcigtLXUpKTsKICAgIH0KCiAgICAubGF5ZXItbGlzdCBsaSB7CiAgICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgICAgcGFkZGluZy1sZWZ0OiBjYWxjKDEuMyAqIHZhcigtLXUpKTsKICAgICAgZm9udC1zaXplOiBjYWxjKDEuNiAqIHZhcigtLXUpKTsKICAgICAgbGluZS1oZWlnaHQ6IDEuNDsKICAgICAgY29sb3I6IHZhcigtLWluay0xKTsKICAgICAgd29yZC1icmVhazoga2VlcC1hbGw7CiAgICAgIG92ZXJmbG93LXdyYXA6IGJyZWFrLXdvcmQ7CiAgICB9CgogICAgLmxheWVyLWxpc3QgbGk6OmJlZm9yZSB7CiAgICAgIGNvbnRlbnQ6ICIiOwogICAgICBwb3NpdGlvbjogYWJzb2x1dGU7CiAgICAgIGxlZnQ6IDA7CiAgICAgIHRvcDogY2FsYygwLjkgKiB2YXIoLS11KSk7CiAgICAgIHdpZHRoOiBjYWxjKDAuNSAqIHZhcigtLXUpKTsKICAgICAgaGVpZ2h0OiBjYWxjKDAuNSAqIHZhcigtLXUpKTsKICAgICAgYm9yZGVyLXJhZGl1czogNTAlOwogICAgICBiYWNrZ3JvdW5kOiB2YXIoLS1pbmstMyk7CiAgICB9CgogICAgLyog4pSA4pSA4pSA4pSA4pSA4pSAIEFycm93cyDilIDilIDilIDilIDilIDilIAgKi8KICAgIC5hcnJvd3MgewogICAgICBwb3NpdGlvbjogYWJzb2x1dGU7CiAgICAgIGluc2V0OiAwOwogICAgICBwb2ludGVyLWV2ZW50czogbm9uZTsKICAgICAgei1pbmRleDogMzsKICAgIH0KCiAgICAuZmxvdy1icmlkZ2UgewogICAgICBwb3NpdGlvbjogYWJzb2x1dGU7CiAgICAgIHdpZHRoOiBjYWxjKDI0LjUgKiB2YXIoLS11KSk7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7CiAgICAgIGdhcDogY2FsYygwLjk1ICogdmFyKC0tdSkpOwogICAgfQoKICAgIC5icmlkZ2UtY29yZS1leHBlcnQgewogICAgICBsZWZ0OiBjYWxjKDIwLjIgKiB2YXIoLS11KSk7CiAgICAgIHRvcDogY2FsYyg0OC4xICogdmFyKC0tdSkpOwogICAgfQoKICAgIC5icmlkZ2UtZXhwZXJ0LXNlcnZpY2UgewogICAgICBsZWZ0OiBjYWxjKDU1LjggKiB2YXIoLS11KSk7CiAgICAgIHRvcDogY2FsYyg0OC4xICogdmFyKC0tdSkpOwogICAgfQoKICAgIC5icmlkZ2Utc2VydmljZS1idXNpbmVzcyB7CiAgICAgIGxlZnQ6IGNhbGMoOTAuNyAqIHZhcigtLXUpKTsKICAgICAgdG9wOiBjYWxjKDQ4LjEgKiB2YXIoLS11KSk7CiAgICB9CgogICAgLmFycm93IHsKICAgICAgcG9zaXRpb246IHJlbGF0aXZlOwogICAgICB3aWR0aDogMTAwJTsKICAgICAgaGVpZ2h0OiBjYWxjKDQuODUgKiB2YXIoLS11KSk7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7CiAgICAgIGp1c3RpZnktY29udGVudDogY2VudGVyOwogICAgICBmb250LXNpemU6IGNhbGMoMS44NSAqIHZhcigtLXUpKTsKICAgICAgZm9udC13ZWlnaHQ6IDgwMDsKICAgICAgbGV0dGVyLXNwYWNpbmc6IDAuMTJlbTsKICAgICAgY29sb3I6ICM1YTI4MGM7CiAgICAgIG92ZXJmbG93OiBoaWRkZW47CiAgICAgIGNsaXAtcGF0aDogcG9seWdvbigwIDIwJSwgODYlIDIwJSwgODYlIDAlLCAxMDAlIDUwJSwgODYlIDEwMCUsIDg2JSA4MCUsIDAgODAlKTsKICAgIH0KCiAgICAuYXJyb3cuaXMtaW4gewogICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoY2FsYygtMiAqIHZhcigtLXUpKSk7CiAgICAgIGNvbG9yOiAjMDczZDNkOwogICAgICBjbGlwLXBhdGg6IHBvbHlnb24oMTAwJSAyMCUsIDE0JSAyMCUsIDE0JSAwJSwgMCA1MCUsIDE0JSAxMDAlLCAxNCUgODAlLCAxMDAlIDgwJSk7CiAgICB9CgogICAgLmFycm93LmlzLW91dCB7CiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWChjYWxjKDIgKiB2YXIoLS11KSkpOwogICAgfQoKICAgIC8qIFN0YXRpYyBmaWxsOiBzdWJ0bGUgYmFzZSwgc2xpZ2h0bHkgYnJpZ2h0ZXIgYXQgdG9wIGVkZ2UgZm9yICJnbGFzcyIgZmVlbCAqLwogICAgLmFycm93OjpiZWZvcmUgewogICAgICBjb250ZW50OiAiIjsKICAgICAgcG9zaXRpb246IGFic29sdXRlOwogICAgICBpbnNldDogMDsKICAgICAgYmFja2dyb3VuZDogbGluZWFyLWdyYWRpZW50KDE4MGRlZywKICAgICAgICByZ2JhKDE2MCwgOTAsIDIzLCAwLjIwKSwKICAgICAgICByZ2JhKDE2MCwgOTAsIDIzLCAwLjA4KSA1NSUsCiAgICAgICAgcmdiYSgxNjAsIDkwLCAyMywgMC4xNCkgMTAwJSk7CiAgICAgIHotaW5kZXg6IDA7CiAgICB9CgogICAgLmFycm93LmlzLWluOjpiZWZvcmUgewogICAgICBiYWNrZ3JvdW5kOiBsaW5lYXItZ3JhZGllbnQoMTgwZGVnLAogICAgICAgIHJnYmEoMTUsIDkxLCA5MSwgMC4yMCksCiAgICAgICAgcmdiYSgxNSwgOTEsIDkxLCAwLjA4KSA1NSUsCiAgICAgICAgcmdiYSgxNSwgOTEsIDkxLCAwLjE0KSAxMDAlKTsKICAgIH0KCiAgICAvKiBTaW5nbGUtcGVhayBzd2VlcCwgbWF0Y2hlcyBvcmlnaW5hbCBmZWVsICovCiAgICAuYXJyb3c6OmFmdGVyIHsKICAgICAgY29udGVudDogIiI7CiAgICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTsKICAgICAgdG9wOiAwOwogICAgICBib3R0b206IDA7CiAgICAgIGxlZnQ6IDA7CiAgICAgIHdpZHRoOiA0NCU7CiAgICAgIGJhY2tncm91bmQ6IGxpbmVhci1ncmFkaWVudCg5MGRlZywKICAgICAgICB0cmFuc3BhcmVudCAwJSwKICAgICAgICByZ2JhKDE2MCwgOTAsIDIzLCAwLjc4KSA0OCUsCiAgICAgICAgdHJhbnNwYXJlbnQgMTAwJSk7CiAgICAgIGFuaW1hdGlvbjogZmxvdy1vdXQgMy40cyBsaW5lYXIgaW5maW5pdGU7CiAgICAgIHotaW5kZXg6IDE7CiAgICB9CgogICAgLmFycm93LmlzLWluOjphZnRlciB7CiAgICAgIGJhY2tncm91bmQ6IGxpbmVhci1ncmFkaWVudCg5MGRlZywKICAgICAgICB0cmFuc3BhcmVudCAwJSwKICAgICAgICByZ2JhKDE1LCA5MSwgOTEsIDAuNzgpIDQ4JSwKICAgICAgICB0cmFuc3BhcmVudCAxMDAlKTsKICAgICAgYW5pbWF0aW9uOiBmbG93LWluIDMuNHMgbGluZWFyIGluZmluaXRlOwogICAgfQoKICAgIC5hcnJvdyBzcGFuIHsKICAgICAgcG9zaXRpb246IHJlbGF0aXZlOwogICAgICB6LWluZGV4OiAzOwogICAgICBjb2xvcjogY3VycmVudENvbG9yOwogICAgICB0ZXh0LXNoYWRvdzoKICAgICAgICAwIDFweCAwIHJnYmEoMjU1LCAyNTUsIDI1NSwgMC43NSksCiAgICAgICAgMCAwIDZweCByZ2JhKDI1NSwgMjU1LCAyNTUsIDAuNSk7CiAgICB9CgogICAgLyogQWxsIHRocmVlIGJyaWRnZXMgYW5pbWF0ZSBpbiBzeW5jICovCiAgICAuYXJyb3c6OmFmdGVyIHsgYW5pbWF0aW9uLWRlbGF5OiAwczsgfQoKICAgIEBrZXlmcmFtZXMgZmxvdy1vdXQgewogICAgICAwJSAgIHsgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKC0xMzAlKTsgb3BhY2l0eTogMDsgfQogICAgICAxMiUgIHsgb3BhY2l0eTogMC45OyB9CiAgICAgIDg2JSAgeyBvcGFjaXR5OiAwLjk7IH0KICAgICAgMTAwJSB7IHRyYW5zZm9ybTogdHJhbnNsYXRlWCgyNjAlKTsgb3BhY2l0eTogMDsgfQogICAgfQoKICAgIEBrZXlmcmFtZXMgZmxvdy1pbiB7CiAgICAgIDAlICAgeyB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoMjYwJSk7IG9wYWNpdHk6IDA7IH0KICAgICAgMTIlICB7IG9wYWNpdHk6IDAuOTsgfQogICAgICA4NiUgIHsgb3BhY2l0eTogMC45OyB9CiAgICAgIDEwMCUgeyB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoLTEzMCUpOyBvcGFjaXR5OiAwOyB9CiAgICB9CgogICAgQG1lZGlhIChwcmVmZXJzLXJlZHVjZWQtbW90aW9uOiByZWR1Y2UpIHsKICAgICAgLnBpbGwtY29yZTo6YWZ0ZXIsCiAgICAgIC5hcnJvdzo6YWZ0ZXIgewogICAgICAgIGFuaW1hdGlvbjogbm9uZTsKICAgICAgfQoKICAgICAgLnBpbGwtY29yZTo6YWZ0ZXIgewogICAgICAgIG9wYWNpdHk6IDAuNTU7CiAgICAgIH0KCiAgICAgIC5hcnJvdzo6YWZ0ZXIgewogICAgICAgIG9wYWNpdHk6IDA7CiAgICAgIH0KICAgIH0KCiAgICAvKiDilIDilIDilIDilIDilIDilIAgU2lkZWJhciDilIDilIDilIDilIDilIDilIAgKi8KICAgIC5zaWRlYmFyIHsKICAgICAgZGlzcGxheTogZ3JpZDsKICAgICAgZ3JpZC10ZW1wbGF0ZS1yb3dzOiBhdXRvIDFmcjsKICAgICAgZ2FwOiBjYWxjKDIuNCAqIHZhcigtLXUpKTsKICAgICAgcGFkZGluZzogY2FsYygyMiAqIHZhcigtLXUpKSBjYWxjKDEuOCAqIHZhcigtLXUpKSBjYWxjKDIuNCAqIHZhcigtLXUpKSBjYWxjKDEuMiAqIHZhcigtLXUpKTsKICAgICAgYm9yZGVyOiAwOwogICAgICBib3JkZXItcmFkaXVzOiAwOwogICAgICBiYWNrZ3JvdW5kOiB0cmFuc3BhcmVudDsKICAgICAgbWluLWhlaWdodDogMDsKICAgICAgb3ZlcmZsb3c6IHZpc2libGU7CiAgICAgIGFsaWduLWl0ZW1zOiBzdHJldGNoOwogICAgfQoKICAgIC5zaWRlYmFyLWdyaWQgewogICAgICBkaXNwbGF5OiBncmlkOwogICAgICBncmlkLXRlbXBsYXRlLWNvbHVtbnM6IHJlcGVhdCgyLCBtaW5tYXgoMCwgMWZyKSk7CiAgICAgIGFsaWduLWNvbnRlbnQ6IHN0YXJ0OwogICAgICBjb2x1bW4tZ2FwOiBjYWxjKDEuNCAqIHZhcigtLXUpKTsKICAgICAgcm93LWdhcDogY2FsYygxLjU1ICogdmFyKC0tdSkpOwogICAgfQoKICAgIC5zaWRlYmFyLWhlYWQgewogICAgICBkaXNwbGF5OiBmbGV4OwogICAgICBmbGV4LWRpcmVjdGlvbjogY29sdW1uOwogICAgICBnYXA6IGNhbGMoMC40ICogdmFyKC0tdSkpOwogICAgICBwYWRkaW5nLWJvdHRvbTogMDsKICAgICAgYm9yZGVyLWJvdHRvbTogMDsKICAgICAgdGV4dC1hbGlnbjogbGVmdDsKICAgIH0KCiAgICAuc2lkZWJhci10aXRsZSB7CiAgICAgIGZvbnQtc2l6ZTogY2FsYygyLjU1ICogdmFyKC0tdSkpOwogICAgICBmb250LXdlaWdodDogNzAwOwogICAgICBsaW5lLWhlaWdodDogMS4xNTsKICAgICAgY29sb3I6IHZhcigtLWluay0wKTsKICAgIH0KCiAgICAuc2lkZWJhci1zdWJ0aXRsZSB7CiAgICAgIGZvbnQtc2l6ZTogY2FsYygxLjUgKiB2YXIoLS11KSk7CiAgICAgIGNvbG9yOiB2YXIoLS1pbmstMik7CiAgICAgIGxldHRlci1zcGFjaW5nOiAwLjAyZW07CiAgICB9CgogICAgLnNpZGViYXItc2VjdGlvbiB7CiAgICAgIGRpc3BsYXk6IGZsZXg7CiAgICAgIGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgICAgIGFsaWduLWl0ZW1zOiBmbGV4LXN0YXJ0OwogICAgICBnYXA6IGNhbGMoMC40NSAqIHZhcigtLXUpKTsKICAgIH0KCiAgICAuc2lkZWJhci1zZWN0aW9uIGgzIHsKICAgICAgZm9udC1zaXplOiBjYWxjKDEuNzUgKiB2YXIoLS11KSk7CiAgICAgIGZvbnQtd2VpZ2h0OiA3MDA7CiAgICAgIGxldHRlci1zcGFjaW5nOiAwLjA0ZW07CiAgICAgIGNvbG9yOiB2YXIoLS10ZWFsKTsKICAgICAgbGluZS1oZWlnaHQ6IDEuNDsKICAgICAgd2hpdGUtc3BhY2U6IG5vd3JhcDsKICAgIH0KCiAgICAuc2lkZWJhci1zZWN0aW9uIHVsIHsKICAgICAgbGlzdC1zdHlsZTogbm9uZTsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsKICAgICAgZ2FwOiBjYWxjKDAuMzIgKiB2YXIoLS11KSk7CiAgICB9CgogICAgLnNpZGViYXItc2VjdGlvbiBsaSB7CiAgICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgICAgcGFkZGluZy1sZWZ0OiBjYWxjKDEuMiAqIHZhcigtLXUpKTsKICAgICAgZm9udC1zaXplOiBjYWxjKDEuNjUgKiB2YXIoLS11KSk7CiAgICAgIGNvbG9yOiB2YXIoLS1pbmstMSk7CiAgICAgIGxpbmUtaGVpZ2h0OiAxLjQ7CiAgICB9CgogICAgLnNpZGViYXItc2VjdGlvbiBsaTo6YmVmb3JlIHsKICAgICAgY29udGVudDogIiI7CiAgICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTsKICAgICAgbGVmdDogMDsKICAgICAgdG9wOiBjYWxjKDAuODUgKiB2YXIoLS11KSk7CiAgICAgIHdpZHRoOiBjYWxjKDAuNDIgKiB2YXIoLS11KSk7CiAgICAgIGhlaWdodDogY2FsYygwLjQyICogdmFyKC0tdSkpOwogICAgICBib3JkZXItcmFkaXVzOiA1MCU7CiAgICAgIGJhY2tncm91bmQ6IHZhcigtLWluay0zKTsKICAgIH0KCiAgICAvKiDilIDilIDilIDilIDilIDilIAgRm9vdGVyIOKUgOKUgOKUgOKUgOKUgOKUgCAqLwogICAgLmRlY2stZm9vdGVyIHsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsKICAgICAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICAgICAgZ2FwOiBjYWxjKDAuNDUgKiB2YXIoLS11KSk7CiAgICAgIHBhZGRpbmctdG9wOiBjYWxjKDAuNCAqIHZhcigtLXUpKTsKICAgICAgdGV4dC1hbGlnbjogY2VudGVyOwogICAgfQoKICAgIC5ub3RlIHsKICAgICAgZGlzcGxheTogZmxleDsKICAgICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICAgIGFsaWduLWl0ZW1zOiBiYXNlbGluZTsKICAgICAgZ2FwOiBjYWxjKDAuNTUgKiB2YXIoLS11KSk7CiAgICAgIGZvbnQtc2l6ZTogY2FsYygxLjU1ICogdmFyKC0tdSkpOwogICAgICBsaW5lLWhlaWdodDogMS40NTsKICAgICAgY29sb3I6IHJnYmEoMTMsIDEzLCAxMywgMC43Mik7CiAgICB9CgogICAgLm5vdGUtbWFya2VyIHsgY29sb3I6IHZhcigtLWFtYmVyKTsgfQogICAgLm5vdGUtbnVtICAgIHsgY29sb3I6IHZhcigtLXRlYWwpOyBmb250LXdlaWdodDogNzAwOyB9CgogIDwvc3R5bGU+CjwvaGVhZD4KPGJvZHk+CiAgPG1haW4gY2xhc3M9ImRlY2siPgogICAgPGhlYWRlciBjbGFzcz0iZGVjay1oZWFkZXIiPgogICAgICA8aDEgY2xhc3M9ImRlY2stdGl0bGUiPkFJIOe7hOe7h+aetuaehCDCtyA8ZW0+5LulIEFJIOS4uuS4reW/g+eahCBSYWFTIOacjeWKoeaooeW8jzwvZW0+PC9oMT4KICAgIDwvaGVhZGVyPgoKICAgIDxzZWN0aW9uIGNsYXNzPSJzdGFnZSI+CiAgICAgIDxkaXYgY2xhc3M9ImRpYWdyYW0iPgogICAgICAgIDxkaXYgY2xhc3M9InBpbGwgcGlsbC1vdXRlciI+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJwaWxsIHBpbGwtc2VydmljZSI+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9InBpbGwgcGlsbC1leHBlcnQiPgogICAgICAgICAgICAgIDxkaXYgY2xhc3M9InBpbGwgcGlsbC1jb3JlIj4KICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9ImNvcmUtdGl0bGUiPkFJIOS4reWPsDwvZGl2PgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0iY29yZS1pdGVtcyI+CiAgICAgICAgICAgICAgICAgIDxzcGFuPueul+WKmzwvc3Bhbj4KICAgICAgICAgICAgICAgICAgPHNwYW4+5pWw5o2uPC9zcGFuPgogICAgICAgICAgICAgICAgICA8c3Bhbj7mqKHlnos8L3NwYW4+CiAgICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzPSJsYXllci10ZXh0IGV4cGVydC10ZXh0Ij4KICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9ImxheWVyLXRpdGxlIj5BSSDkuJPlrrbpg6jpl6g8L2Rpdj4KICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9ImxheWVyLXN1YiI+5qOA5p+lIEFJIOW3peS9nOa1gei+k+WHuue7k+aenDwvZGl2PgogICAgICAgICAgICAgICAgPHVsIGNsYXNzPSJsYXllci1saXN0Ij4KICAgICAgICAgICAgICAgICAgPGxpPuazleWKoeS4k+WutjwvbGk+CiAgICAgICAgICAgICAgICAgIDxsaT7otKLliqHkuJPlrrY8L2xpPgogICAgICAgICAgICAgICAgICA8bGk+5ZOB54mM5biC5Zy65LiT5a62PC9saT4KICAgICAgICAgICAgICAgICAgPGxpPuWuouaIt+acjeWKoeS4k+WutjwvbGk+CiAgICAgICAgICAgICAgICAgIDxsaT7kurrkuovooYzmlL/kuJPlrrY8L2xpPgogICAgICAgICAgICAgICAgPC91bD4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9ImxheWVyLXRleHQgc2VydmljZS10ZXh0Ij4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzPSJsYXllci10aXRsZSI+QUkg5pyN5Yqh6YOo6ZeoPC9kaXY+CiAgICAgICAgICAgICAgPGRpdiBjbGFzcz0ibGF5ZXItc3ViIj7lpITnkIbovpPlhaXkuI7nu5PmnpzovpPlh7o8L2Rpdj4KICAgICAgICAgICAgICA8dWwgY2xhc3M9ImxheWVyLWxpc3QiPgogICAgICAgICAgICAgICAgPGxpPuaehOW7uiBBSSDnn6Xor4blupM8L2xpPgogICAgICAgICAgICAgICAgPGxpPuW8gOWPkemFjee9riBBZ2VudO+8mlNraWxsLCBQcm9tcHQsIEhhcm5lc3MsIFNvdWwsIE1lbW9yeTwvbGk+CiAgICAgICAgICAgICAgICA8bGk+QWdlbnQg5pel5bi46L+Q6JCl77ya5rOV5Yqh44CB6LSi5Yqh44CB5ZOB54mM5biC5Zy644CB5a6i5oi35pyN5Yqh44CB5Lq65LqL6KGM5pS/PC9saT4KICAgICAgICAgICAgICA8L3VsPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPGRpdiBjbGFzcz0ibGF5ZXItdGV4dCBidXNpbmVzcy10ZXh0Ij4KICAgICAgICAgICAgPGRpdiBjbGFzcz0ibGF5ZXItdGl0bGUiPuS4muWKoee6vzwvZGl2PgogICAgICAgICAgICA8ZGl2IGNsYXNzPSJsYXllci1zdWIiPumcgOaxguaUtumbhuS4jumcgOaxgui+k+WFpTwvZGl2PgogICAgICAgICAgICA8dWwgY2xhc3M9ImxheWVyLWxpc3QiPgogICAgICAgICAgICAgIDxsaT7pnIDmsYLmlLbpm4Y8L2xpPgogICAgICAgICAgICAgIDxsaT7llYbliqHlkIjkvZw8L2xpPgogICAgICAgICAgICA8L3VsPgogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3M9ImFycm93cyI+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJmbG93LWJyaWRnZSBicmlkZ2UtY29yZS1leHBlcnQiPgogICAgICAgICAgICA8ZGl2IGNsYXNzPSJhcnJvdyBpcy1vdXQiPjxzcGFuPui+k+WHujwvc3Bhbj48L2Rpdj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJyb3cgaXMtaW4iPjxzcGFuPui+k+WFpTwvc3Bhbj48L2Rpdj4KICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPGRpdiBjbGFzcz0iZmxvdy1icmlkZ2UgYnJpZGdlLWV4cGVydC1zZXJ2aWNlIj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJyb3cgaXMtb3V0Ij48c3Bhbj7ovpPlh7o8L3NwYW4+PC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9ImFycm93IGlzLWluIj48c3Bhbj7ovpPlhaU8L3NwYW4+PC9kaXY+CiAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDxkaXYgY2xhc3M9ImZsb3ctYnJpZGdlIGJyaWRnZS1zZXJ2aWNlLWJ1c2luZXNzIj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJyb3cgaXMtb3V0Ij48c3Bhbj7ovpPlh7o8L3NwYW4+PC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9ImFycm93IGlzLWluIj48c3Bhbj7ovpPlhaU8L3NwYW4+PC9kaXY+CiAgICAgICAgICA8L2Rpdj4KICAgICAgICA8L2Rpdj4KICAgICAgPC9kaXY+CgogICAgICA8YXNpZGUgY2xhc3M9InNpZGViYXIiPgogICAgICAgIDxkaXYgY2xhc3M9InNpZGViYXItaGVhZCI+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJzaWRlYmFyLXRpdGxlIj7ln7rnoYDkv53pmpw8L2Rpdj4KICAgICAgICAgIDxkaXYgY2xhc3M9InNpZGViYXItc3VidGl0bGUiPuWuieWFqCAvIOmjjuaOpyAvIOWQiOinhDwvZGl2PgogICAgICAgIDwvZGl2PgoKICAgICAgICA8ZGl2IGNsYXNzPSJzaWRlYmFyLWdyaWQiPgogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InNpZGViYXItc2VjdGlvbiI+CiAgICAgICAgICAgIDxoMz7lkIjop4TnrqHnkIY8L2gzPgogICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgPGxpPuebkeeuoeinhOWImTwvbGk+CiAgICAgICAgICAgICAgPGxpPuazleW+i+i+ueeVjDwvbGk+CiAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICA8L3NlY3Rpb24+CgogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InNpZGViYXItc2VjdGlvbiI+CiAgICAgICAgICAgIDxoMz7po47pmanmjqfliLY8L2gzPgogICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgPGxpPuS4muWKoemjjumZqTwvbGk+CiAgICAgICAgICAgICAgPGxpPuS6pOaYk+mjjumZqTwvbGk+CiAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICA8L3NlY3Rpb24+CgogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InNpZGViYXItc2VjdGlvbiI+CiAgICAgICAgICAgIDxoMz7mlbDmja7nrqHnkIY8L2gzPgogICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgPGxpPuaVsOaNruadg+mZkDwvbGk+CiAgICAgICAgICAgICAgPGxpPuaVsOaNruagh+WHhjwvbGk+CiAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICA8L3NlY3Rpb24+CgogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InNpZGViYXItc2VjdGlvbiI+CiAgICAgICAgICAgIDxoMz7mlK/ku5jkuI7otYTph5E8L2gzPgogICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgPGxpPui1hOmHkeWuieWFqDwvbGk+CiAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICA8L3NlY3Rpb24+CgogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InNpZGViYXItc2VjdGlvbiI+CiAgICAgICAgICAgIDxoMz7lronlhag8L2gzPgogICAgICAgICAgICA8dWw+CiAgICAgICAgICAgICAgPGxpPuS/oeaBr+WuieWFqDwvbGk+CiAgICAgICAgICAgICAgPGxpPuezu+e7n+WuieWFqDwvbGk+CiAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICA8L3NlY3Rpb24+CiAgICAgICAgPC9kaXY+CiAgICAgIDwvYXNpZGU+CiAgICA8L3NlY3Rpb24+CgogIDwvbWFpbj4KPC9ib2R5Pgo8L2h0bWw+Cg=="
+              title="AI 组织架构 · 以 AI 为中心的 RaaS 服务模式"></iframe>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔════════════════════════════════════════════════╗ -->
+<!-- ║  PAGE 2 · AI 在 AA 组织架构中的应用             ║ -->
+<!-- ╚════════════════════════════════════════════════╝ -->
+<!-- ╔════════════════════════════════════════════════╗ -->
+<!-- ║  PAGE 2 · AI 员工卡片图鉴                        ║ -->
+<!-- ╚════════════════════════════════════════════════╝ -->
+<section class="slide" id="s-app" data-name="AI 在 AA 组织架构中的应用">
+  <div class="slide-head">
+    <div class="slide-num">02 · AI 在 AA 组织架构中的应用</div>
+    <div class="slide-kicker">Before / After · 部门组织互动逻辑</div>
+  </div>
+
+
+  <div class="slide-body">
+    <div class="diptych">
+
+      <!-- ════════════════════ BEFORE ════════════════════ -->
+      <div class="panel before">
+        <div class="panel-head">
+          <span class="dot-icon"></span>
+          <span class="panel-eye">Before · 没有 AI 介入</span>
+          <span class="panel-title">部门孤岛 · 跨部门手工协作</span>
+        </div>
+
+        <div class="panel-svg-wrap">
+          <svg viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before · 部门孤岛 + 跨部门手工协作">
+            <defs>
+              <marker id="bArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#8c8779"/>
+              </marker>
+              <!-- minimal human silhouette as a symbol -->
+              <symbol id="human" viewBox="0 0 32 32">
+                <circle cx="16" cy="10.5" r="5.2" fill="#8c8779" opacity="0.55"/>
+                <path d="M 4.5 28 C 5 20.5 11 17.5 16 17.5 C 21 17.5 27 20.5 27.5 28 Z" fill="#8c8779" opacity="0.55"/>
+              </symbol>
+            </defs>
+
+            <!-- ── EXECUTIVE LEADERSHIP ── -->
+            <rect x="220" y="14" width="160" height="38" rx="4" fill="#57534b" stroke="#2d2924" stroke-width="1"/>
+            <text x="300" y="32" text-anchor="middle" font-family="Newsreader, serif" font-size="12.5" font-weight="500" fill="#fbf9f2">高阶主管 · 决策层</text>
+            <text x="300" y="46" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#ddd6c3" letter-spacing="1.5">EXECUTIVE LEADERSHIP</text>
+
+            <!-- tree line from exec down to 3 silos -->
+            <g stroke="#57534b" stroke-width="1" fill="none">
+              <path d="M 300 52 L 300 64"/>
+              <path d="M 105 64 L 495 64"/>
+              <path d="M 105 64 L 105 76"/>
+              <path d="M 300 64 L 300 76"/>
+              <path d="M 495 64 L 495 76"/>
+            </g>
+
+            <!-- ── three silos (columns) ── -->
+            <!-- silo 1: HR -->
+            <rect x="22" y="78" width="166" height="220" rx="6" fill="#fbf9f2" stroke="#b8b09a" stroke-width="0.8" opacity="0.6"/>
+            <rect x="22" y="78" width="166" height="30" rx="6" fill="#ebe5d2" stroke="#b8b09a" stroke-width="0.8"/>
+            <text x="105" y="98" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="600" fill="#14110c">人力 / 法务 / 财务</text>
+
+            <!-- silo 2: Finance -->
+            <rect x="217" y="78" width="166" height="220" rx="6" fill="#fbf9f2" stroke="#b8b09a" stroke-width="0.8" opacity="0.6"/>
+            <rect x="217" y="78" width="166" height="30" rx="6" fill="#ebe5d2" stroke="#b8b09a" stroke-width="0.8"/>
+            <text x="300" y="98" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="600" fill="#14110c">合规 / 风控 / 安全</text>
+
+            <!-- silo 3: Ops/BD -->
+            <rect x="412" y="78" width="166" height="220" rx="6" fill="#fbf9f2" stroke="#b8b09a" stroke-width="0.8" opacity="0.6"/>
+            <rect x="412" y="78" width="166" height="30" rx="6" fill="#ebe5d2" stroke="#b8b09a" stroke-width="0.8"/>
+            <text x="495" y="98" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="600" fill="#14110c">业务 / 市场 / 客服</text>
+
+            <!-- internal vertical spine for each silo -->
+            <g stroke="#b8b09a" stroke-width="0.6">
+              <line x1="105" y1="135" x2="105" y2="292"/>
+              <line x1="300" y1="135" x2="300" y2="292"/>
+              <line x1="495" y1="135" x2="495" y2="292"/>
+            </g>
+
+            <!-- ── role row 1: 总监 ── -->
+            <use href="#human" x="89"  y="125" width="32" height="32"/>
+            <text x="105" y="172" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">总监</text>
+            <use href="#human" x="284" y="125" width="32" height="32"/>
+            <text x="300" y="172" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">总监</text>
+            <use href="#human" x="479" y="125" width="32" height="32"/>
+            <text x="495" y="172" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">总监</text>
+
+            <!-- horizontal channel 1: Cross-Dept Email -->
+            <g>
+              <line x1="125" y1="141" x2="280" y2="141" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <line x1="320" y1="141" x2="475" y2="141" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <rect x="170" y="131" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="202" y="144" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">跨部门邮件</text>
+              <rect x="365" y="131" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="397" y="144" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">跨部门邮件</text>
+            </g>
+
+            <!-- ── role row 2: 经理 ── -->
+            <use href="#human" x="89"  y="185" width="32" height="32"/>
+            <text x="105" y="232" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">经理</text>
+            <use href="#human" x="284" y="185" width="32" height="32"/>
+            <text x="300" y="232" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">经理</text>
+            <use href="#human" x="479" y="185" width="32" height="32"/>
+            <text x="495" y="232" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">经理</text>
+
+            <!-- horizontal channel 2: Coordination Meeting -->
+            <g>
+              <line x1="125" y1="201" x2="280" y2="201" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <line x1="320" y1="201" x2="475" y2="201" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <rect x="170" y="191" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="202" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">协调会议</text>
+              <rect x="365" y="191" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="397" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">协调会议</text>
+            </g>
+
+            <!-- ── role row 3: 专员 ── -->
+            <use href="#human" x="89"  y="245" width="32" height="32"/>
+            <text x="105" y="292" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">专员</text>
+            <use href="#human" x="284" y="245" width="32" height="32"/>
+            <text x="300" y="292" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">专员</text>
+            <use href="#human" x="479" y="245" width="32" height="32"/>
+            <text x="495" y="292" text-anchor="middle" font-family="Noto Sans SC" font-size="10" font-weight="500" fill="#2d2924">专员</text>
+
+            <!-- horizontal channel 3: IM 即时消息 -->
+            <g>
+              <line x1="125" y1="261" x2="280" y2="261" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <line x1="320" y1="261" x2="475" y2="261" stroke="#a05a17" stroke-width="0.9" stroke-dasharray="3,3"/>
+              <rect x="170" y="251" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="202" y="264" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">IM · 即时消息</text>
+              <rect x="365" y="251" width="65" height="18" rx="9" fill="#fef3e2" stroke="#a05a17" stroke-width="0.6"/>
+              <text x="397" y="264" text-anchor="middle" font-family="IBM Plex Mono" font-size="7.5" fill="#a05a17" font-weight="500" letter-spacing="0.5">IM · 即时消息</text>
+            </g>
+
+            <!-- ── output ── -->
+            <rect x="180" y="318" width="240" height="42" rx="3" fill="#fbf9f2" stroke="#57534b" stroke-width="1"/>
+            <text x="300" y="336" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="500" fill="#14110c">业务结果交付</text>
+            <text x="300" y="352" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#8c8779" letter-spacing="1">完全依赖人力 · 重复劳动多</text>
+          </svg>
+        </div>
+
+        <div class="panel-notes">
+          <ul>
+            <li><b>部门孤岛（Silos）</b>——每个部门各自一条纵向管理链。</li>
+            <li><b>跨部门靠手工通讯</b>——邮件、会议、IM 反复同步与对齐。</li>
+            <li><b>结果完全由人交付</b>——重复劳动占比高，难以横向复用。</li>
+            <li><b>跨时区跨文化协同</b>——多时区、多语言沟通带来的效率挑战。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ════════════════════ AFTER ════════════════════ -->
+      <div class="panel after">
+        <div class="panel-head">
+          <span class="dot-icon"></span>
+          <span class="panel-eye">After · AI 介入后</span>
+          <span class="panel-title">人机协同 · 网状组织</span>
+        </div>
+
+        <div class="panel-svg-wrap">
+          <svg viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="After · 人机协同网状组织">
+            <defs>
+              <marker id="aArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#15683f"/>
+              </marker>
+              <marker id="aArrAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#c5523a"/>
+              </marker>
+              <radialGradient id="hubG" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#1a4d4d" stop-opacity="1"/>
+                <stop offset="100%" stop-color="#0d2929" stop-opacity="1"/>
+              </radialGradient>
+            </defs>
+
+            <!-- AI hub at center -->
+            <g>
+              <circle cx="300" cy="100" r="48" fill="url(#hubG)"/>
+              <text x="300" y="96" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="500" fill="#f7f4ec">AI 中台</text>
+              <text x="300" y="112" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#ddd6c3" letter-spacing="1.5">算力·数据·模型</text>
+            </g>
+
+            <!-- Experts wheel (left of hub) -->
+            <g>
+              <rect x="65" y="80" width="150" height="40" rx="4" fill="#fbf9f2" stroke="#15683f" stroke-width="1.2"/>
+              <text x="140" y="98" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="500" fill="#15683f">AI 专家组</text>
+              <text x="140" y="113" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#57534b" letter-spacing="1.2">定标准 · 检查输出</text>
+            </g>
+            <line x1="215" y1="100" x2="252" y2="100" stroke="#15683f" stroke-width="1" marker-end="url(#aArr)"/>
+
+            <!-- Services wheel (right of hub) -->
+            <g>
+              <rect x="385" y="80" width="150" height="40" rx="4" fill="#fbf9f2" stroke="#c5523a" stroke-width="1.2"/>
+              <text x="460" y="98" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="500" fill="#c5523a">AI 服务组</text>
+              <text x="460" y="113" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#57534b" letter-spacing="1.2">对接需求 · 跑运营</text>
+            </g>
+            <line x1="348" y1="100" x2="385" y2="100" stroke="#c5523a" stroke-width="1" marker-end="url(#aArrAccent)"/>
+
+            <!-- 双轮 → Agent 矩阵 -->
+            <line x1="140" y1="120" x2="240" y2="178" stroke="#15683f" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#aArr)"/>
+            <line x1="460" y1="120" x2="360" y2="178" stroke="#c5523a" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#aArrAccent)"/>
+
+            <!-- Agent matrix label -->
+            <text x="300" y="178" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" letter-spacing="2" fill="#15683f">Agent 员工矩阵</text>
+
+            <!-- Agent grid (3 rows × 6 cols = 18 nodes; with mesh lines) -->
+            <g>
+              <!-- 18 agents -->
+              <!-- row 1 -->
+              <circle cx="100" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="100" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="180" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="180" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="260" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="260" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="340" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="340" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="420" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="420" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="500" cy="200" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="500" y="204" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+
+              <!-- row 2 -->
+              <circle cx="140" cy="232" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="140" y="236" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="220" cy="232" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="220" y="236" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="300" cy="232" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="300" y="236" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="380" cy="232" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="380" y="236" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+              <circle cx="460" cy="232" r="11" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+              <text x="460" y="236" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#15683f" font-weight="600">A</text>
+
+              <!-- mesh connections (a few sample diagonals) -->
+              <g stroke="#15683f" stroke-width="0.5" opacity="0.35">
+                <line x1="100" y1="200" x2="140" y2="232"/>
+                <line x1="180" y1="200" x2="140" y2="232"/>
+                <line x1="180" y1="200" x2="220" y2="232"/>
+                <line x1="260" y1="200" x2="220" y2="232"/>
+                <line x1="260" y1="200" x2="300" y2="232"/>
+                <line x1="340" y1="200" x2="300" y2="232"/>
+                <line x1="340" y1="200" x2="380" y2="232"/>
+                <line x1="420" y1="200" x2="380" y2="232"/>
+                <line x1="420" y1="200" x2="460" y2="232"/>
+                <line x1="500" y1="200" x2="460" y2="232"/>
+                <line x1="100" y1="200" x2="180" y2="200"/>
+                <line x1="180" y1="200" x2="260" y2="200"/>
+                <line x1="260" y1="200" x2="340" y2="200"/>
+                <line x1="340" y1="200" x2="420" y2="200"/>
+                <line x1="420" y1="200" x2="500" y2="200"/>
+                <line x1="140" y1="232" x2="220" y2="232"/>
+                <line x1="220" y1="232" x2="300" y2="232"/>
+                <line x1="300" y1="232" x2="380" y2="232"/>
+                <line x1="380" y1="232" x2="460" y2="232"/>
+              </g>
+            </g>
+
+            <!-- arrow from matrix down to humans -->
+            <line x1="300" y1="248" x2="300" y2="278" stroke="#15683f" stroke-width="1" marker-end="url(#aArr)"/>
+
+            <!-- two role tracks for humans -->
+            <g>
+              <!-- left: 复核者 -->
+              <rect x="40" y="280" width="240" height="58" rx="4" fill="#fbf9f2" stroke="#15683f" stroke-width="1"/>
+              <text x="160" y="298" text-anchor="middle" font-family="Newsreader, serif" font-size="11.5" font-weight="500" fill="#15683f">原部门专家 → 复核 / 决策者</text>
+              <text x="160" y="315" text-anchor="middle" font-family="Noto Sans SC" font-size="9.5" fill="#57534b">进入 AI 专家组</text>
+              <text x="160" y="329" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#8c8779" letter-spacing="0.5">迭代标准 · 复核质量 · 处理复杂决策</text>
+
+              <!-- right: 指挥官 -->
+              <rect x="320" y="280" width="240" height="58" rx="4" fill="#fbf9f2" stroke="#c5523a" stroke-width="1"/>
+              <text x="440" y="298" text-anchor="middle" font-family="Newsreader, serif" font-size="11.5" font-weight="500" fill="#c5523a">原部门员工 → AI 指挥官</text>
+              <text x="440" y="315" text-anchor="middle" font-family="Noto Sans SC" font-size="9.5" fill="#57534b">逐步并入 AI 服务组</text>
+              <text x="440" y="329" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" fill="#8c8779" letter-spacing="0.5">提需求 · 给反馈 · 训练 Agent</text>
+            </g>
+
+            <!-- feedback arrows back up -->
+            <path d="M 160 280 L 160 258 L 140 248" stroke="#15683f" stroke-width="0.8" stroke-dasharray="3,3" fill="none" marker-end="url(#aArr)" opacity="0.7"/>
+            <path d="M 440 280 L 440 258 L 460 248" stroke="#c5523a" stroke-width="0.8" stroke-dasharray="3,3" fill="none" marker-end="url(#aArrAccent)" opacity="0.7"/>
+
+            <!-- output -->
+            <rect x="180" y="358" width="240" height="46" rx="3" fill="#f6fbf8" stroke="#15683f" stroke-width="1"/>
+            <text x="300" y="378" text-anchor="middle" font-family="Newsreader, serif" font-size="12" font-weight="500" fill="#15683f">业务结果交付</text>
+            <text x="300" y="394" text-anchor="middle" font-family="IBM Plex Mono" font-size="8.5" fill="#15683f" letter-spacing="1">AI 承接重复·人聚焦判断</text>
+            <line x1="160" y1="338" x2="240" y2="358" stroke="#15683f" stroke-width="0.8" fill="none" marker-end="url(#aArr)" opacity="0.7"/>
+            <line x1="440" y1="338" x2="360" y2="358" stroke="#c5523a" stroke-width="0.8" fill="none" marker-end="url(#aArrAccent)" opacity="0.7"/>
+          </svg>
+        </div>
+
+        <div class="panel-notes">
+          <ul>
+            <li><b>AI 中台 + 双轮组织</b>——孵化并输出 Agent 矩阵。</li>
+            <li><b>Agent 担任执行者 / 初筛者</b>——承担强规则、高重复的工作。</li>
+            <li><b>原部门员工沿两条路径转型</b>：进入专家组做复核与决策；或成为 AI 指挥官，反向训练 Agent，逐步并入服务组。</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- takeaway strip -->
+    <div class="takeaway">
+      <div>
+        <span class="label">本质变化</span>
+        <span class="text">从"<b>层级执行</b>"到"<b>人机网络</b>"——员工不再是流程上的传送带，而是 AI 的<b>复核者</b>与<b>指挥官</b>。</span>
+      </div>
+      <div>
+        <span class="label">分工原则</span>
+        <span class="text">AI 承接强规则、高重复的部分；人聚焦在<b>复杂判断</b>、<b>对外承诺</b>与<b>风险裁决</b>这三类节点上。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔════════════════════════════════════════════════╗ -->
+<!-- ║  PAGE 3 · Lumi 流程 before/after                ║ -->
+<!-- ╚════════════════════════════════════════════════╝ -->
+<section class="slide" id="s-agent-card" data-name="AI 员工卡片图鉴">
+  <div class="slide-head">
+    <div class="slide-num">03 · AI 员工卡片图鉴</div>
+    <div class="slide-kicker">AI 员工全部门卡片图鉴</div>
+  </div>
+
+  <h2 class="key-msg">AA 组织的 AI 员工卡片一览</h2>
+
+  <div class="slide-body">
+    <div class="staff-card-strip">
+      <span>29 Agents</span>
+      <span>104 Skills</span>
+      <span class="tag-good">✅ 78 已上线</span>
+      <span class="tag-alert">🔨 26 开发中</span>
+    </div>
+
+    <div class="staff-card-layout">
+      <aside class="staff-card-sidebar">
+        <div class="staff-card-sidebar-head">AI 员工目录</div>
+        <ul class="staff-card-sidebar-list">
+          <li>aa-finance-intern · 财务部 AI 实习生</li>
+          <li>alpha · AI 测试员</li>
+          <li>am-intern · 账管 AI 实习生</li>
+          <li>asm-intern · ASM 部门 AI 实习生</li>
+          <li>bi-intern · BI 部门 AI 实习生</li>
+          <li>bs-intern · 业务支持部 AI 实习生</li>
+          <li>cango-invest · Cango 投资部 AI 实习生</li>
+          <li>ceo-intern · CEO 领航员</li>
+          <li>cmp-intern · 合规部 AI 实习生</li>
+          <li>community-guide · 社区增长 AI Agent</li>
+          <li>confidential-affairs-intern · 保密事务 AI 实习生</li>
+          <li>contributor-guide · 贡献官 AI Agent</li>
+          <li>dev-intern · 研发部 AI 实习生</li>
+          <li>fixed-assets-finance-intern · 流动资产部 AI 实习生</li>
+          <li>general · 通用 AI Agent</li>
+          <li>hr-service · HR 团队员工服务</li>
+          <li>liquid-asset-intern · 流动资产部 AI 实习生</li>
+          <li>medspa-intern · 医美 AI 实习生</li>
+          <li>ns-finance-intern · NS 财务部 AI 实习生</li>
+          <li>ns-inst-partnerships-intern · NS 合作伙伴部 AI 实习生</li>
+          <li>osm-intern · OSM 部门 AI 实习生</li>
+          <li>prime-operations-intern · Prime 运营部 AI 实习生</li>
+          <li>product-intern · 产品部 AI 实习生</li>
+          <li>rm-iron-intern · 风控部 AI 实习生</li>
+          <li>rm-project-monitor-intern · 风控项目监控 AI</li>
+          <li>rm-rule-intern · 风控部 AI 规则助手</li>
+          <li>talent-acquisition · 招聘 AI 助手</li>
+          <li>treasury-intern · 资金部 AI 实习生</li>
+          <li>xue-intern · xue 项目 AI 助手</li>
+        </ul>
+      </aside>
+
+      <article class="staff-card">
+      <div class="staff-card-top">
+        <div class="staff-card-avatar">a</div>
+        <div>
+          <div class="staff-card-title-row">
+            <div class="staff-card-name">aa-finance-intern · 财务部 AI 实习生</div>
+            <div class="staff-card-status">✅ 10 已上线</div>
+          </div>
+          <div class="staff-card-about">
+            <span class="staff-card-about-label">👤 关于我</span>
+            <span>财务部 AI 实习生</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="staff-card-body">
+        <div class="staff-card-panels">
+          <div class="staff-card-panel panel-find">
+            <div class="staff-card-panel-title">✦ 找我做</div>
+            <ul>
+              <li>文档内容脱敏</li>
+              <li>文件管理器</li>
+              <li>Google Drive 文档同步</li>
+              <li>图片识别（Image Recognition via VLM）</li>
+              <li>公司知识库查询</li>
+              <li>PDF 文件生成</li>
+              <li>Slack 消息总结</li>
+              <li>会议纪要生成</li>
+              <li>网页截图与内容提取</li>
+            </ul>
+          </div>
+
+          <div class="staff-card-panel panel-avoid">
+            <div class="staff-card-panel-title">✦ 别找我做</div>
+            <ul>
+              <li>超出 Skills 覆盖范围的事务，引导用户联系对应 agent</li>
+              <li>不替代财务负责人做最终资金审批与会计判断</li>
+              <li>不处理财务域之外的人事/研发流程决策</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="staff-card-prompt-panel">
+          <div class="staff-card-panel-title">🗣️ 试试这样对我说</div>
+          <ul class="staff-card-prompt">
+            <li>「帮我审核这批费用报销单据，OCR 识别后标出异常项。」</li>
+            <li>「跑一下本月现金对账，把银行流水和 NS 系统差异列出来。」</li>
+            <li>「这份新合同帮我解析关键条款，更新到合同台账。」</li>
+            <li>「帮我草拟本月末的 NS 记账分录。」</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="staff-card-footer">
+        <div class="skill-header">
+          <div class="staff-skill-summary">🧩 技能树</div>
+          <div class="skill-status">✅ 10 已上线</div>
+        </div>
+        <div class="staff-skill-score">10 / 10</div>
+        <div class="skill-bar"><div class="skill-bar-fill"></div></div>
+      </div>
+    </article>
+    </div>
+  </div>
+</section>
+
+
+<section class="slide" id="s-lumi" data-name="Lumi 流程">
+  <div class="slide-head">
+    <div class="slide-num">04 · Lumi · 人力服务</div>
+    <div class="slide-kicker">Before / After</div>
+  </div>
+
+  <h2 class="key-msg">Lumi 进入后——<br/>员工先<em>自助</em>，HR 后<em>升级</em>。</h2>
+  <p class="point">过去员工任何问题都要找 HR，重复答疑占用极高。Lumi 进入后，常规问题由 AI 直接解决，HR 留出时间处理真正需要人来判断的复杂事项。</p>
+
+  <div class="slide-body">
+
+    <!-- Before flow -->
+    <div class="flow-section">
+      <div class="flow-eyebrow before"><span class="dot-icon"></span>Before · 没有 Lumi</div>
+      <div class="flow-row">
+        <div class="step">
+          <div class="idx">①</div>
+          <div class="label">员工发起问题</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">②</div>
+          <div class="label">HR 识别问题类型</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">③</div>
+          <div class="label">查政策文档<br/>二次确认</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">④</div>
+          <div class="label">回复员工</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">⑤</div>
+          <div class="label">HR 发模板 /<br/>员工手动提交</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">⑥</div>
+          <div class="label">HR 校验 /<br/>补件往返</div>
+          <div class="role">人工</div>
+        </div>
+        <div class="step">
+          <div class="idx">⑦</div>
+          <div class="label">HR 跟进与<br/>结果通知</div>
+          <div class="role">人工</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- transition divider -->
+    <div class="flow-divider">
+      ▼ Lumi 介入 · 把「<b>识别</b>」「<b>分类直答</b>」「<b>预填提交</b>」「<b>状态回推</b>」交给 AI ▼
+    </div>
+
+    <!-- After flow -->
+    <div class="flow-section" style="background:#f6fbf8;border-color:#cfe5d8">
+      <div class="flow-eyebrow after"><span class="dot-icon"></span>After · 有 Lumi</div>
+      <div class="flow-row">
+        <div class="step ai-done">
+          <div class="idx">①</div>
+          <div class="label">员工在 Slack/IM<br/>直接问 Lumi</div>
+          <div class="role">AI 入口</div>
+        </div>
+        <div class="step ai-done">
+          <div class="idx">②</div>
+          <div class="label">Lumi 意图识别<br/>+ 场景分类</div>
+          <div class="role">AI 完成</div>
+        </div>
+        <div class="branch-group">
+          <div class="branch-group-title">③ 场景化直答</div>
+          <div class="branch-grid">
+            <div class="branch-cell"><div class="b-label">政策问答</div><div class="b-out">结论 + 依据</div></div>
+            <div class="branch-cell"><div class="b-label">差旅 / 报销</div><div class="b-out">标准 + 步骤</div></div>
+            <div class="branch-cell"><div class="b-label">工资查询</div><div class="b-out">地区化入口</div></div>
+            <div class="branch-cell"><div class="b-label">联系人路由</div><div class="b-out">直出负责人</div></div>
+            <div class="branch-cell"><div class="b-label">系统操作</div><div class="b-out">分步引导</div></div>
+            <div class="branch-cell"><div class="b-label">证明申请</div><div class="b-out">字段预填</div></div>
+          </div>
+        </div>
+        <div class="step new-node">
+          <span class="new-flag">NEW</span>
+          <div class="idx">④</div>
+          <div class="label">命中例外？<br/>升级 HR 审批</div>
+          <div class="role">AI 协作</div>
+        </div>
+        <div class="step ai-done">
+          <div class="idx">⑤</div>
+          <div class="label">自动提交<br/>并建工单</div>
+          <div class="role">AI 完成</div>
+        </div>
+        <div class="step ai-done">
+          <div class="idx">⑥</div>
+          <div class="label">状态自动回推<br/>给员工</div>
+          <div class="role">AI 完成</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- which processes get saved/improved -->
+    <table class="qual-table">
+      <thead>
+        <tr>
+          <th>流程环节</th>
+          <th>没有 Lumi</th>
+          <th>有 Lumi</th>
+          <th>节约 / 提效点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="proc">政策咨询</td>
+          <td>HR 人工查文档后回复</td>
+          <td>Lumi 检索后即时回复，附引用来源</td>
+          <td class="save">减少 HR 重复答疑，回复一致性更高</td>
+        </tr>
+        <tr>
+          <td class="proc">证明申请</td>
+          <td>HR 告知系统路径 → 通过后转 HR → 打印盖章</td>
+          <td>Lumi 直接给路径与步骤（按国家 / 实体 / 类型）</td>
+          <td class="save">减少反复沟通与问询</td>
+        </tr>
+        <tr>
+          <td class="proc">差旅 / 报销问答</td>
+          <td>HR 解释标准 + 发手册</td>
+          <td>Lumi 按地区 / 级别自动给标准和步骤</td>
+          <td class="save">减少解释成本，降低违规报销</td>
+        </tr>
+        <tr>
+          <td class="proc">工资单查询</td>
+          <td>员工找不到入口反复问 HR</td>
+          <td>Lumi 按国家给到查询路径和步骤</td>
+          <td class="save">减少低价值咨询</td>
+        </tr>
+        <tr>
+          <td class="proc">找人 / 转接</td>
+          <td>HR 先判断归属再转发</td>
+          <td>Lumi 按 BU / 国家 / 主题自动路由</td>
+          <td class="save">减少中间路由时间</td>
+        </tr>
+        <tr>
+          <td class="proc">系统使用</td>
+          <td>HR 培训 + 零散答疑</td>
+          <td>Lumi 分步引导 + FAQ</td>
+          <td class="save">减少培训负担，提升自助率</td>
+        </tr>
+        <tr>
+          <td class="proc">进度追踪</td>
+          <td>员工反复催问</td>
+          <td>Lumi 自动状态回推</td>
+          <td class="save">减少催办沟通，提升体验</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- HONEST limitations card -->
+    <div class="honest">
+      <h4><span class="icon">诚实地说</span>当前 Lumi 还有以下不足</h4>
+      <ul>
+        <li><b>偶发幻觉</b>——知识库未覆盖时，可能给出看似合理但不准的答案。</li>
+        <li><b>跨实体政策易混淆</b>——偶尔未先确认主体就作答。</li>
+        <li><b>例外识别不稳</b>——少数边缘场景未能正确升级 HR。</li>
+        <li><b>表格类召回偏差</b>——结构化表格的精确数值有时未能完整复现。</li>
+        <li><b>关键节点仍需人复核</b>——证明、薪酬、争议裁决一律不直出。</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ╔════════════════════════════════════════════════╗ -->
+<!-- ║  PAGE 4 · Adrian 流程 原样嵌入                  ║ -->
+<!-- ╚════════════════════════════════════════════════╝ -->
+<section class="slide" id="s-adrian" data-name="Adrian 流程">
+  <div class="slide-head">
+    <div class="slide-num">05 · Adrian · 法务咨询</div>
+    <div class="slide-kicker">Before / After</div>
+  </div>
+
+  <div class="slide-body" style="overflow:auto">
+      <div class="adrian-scope">
+
+<div class="container">
+
+  <!-- ============ Lumi-style 流程改变 ============ -->
+  <section class="lumi-section">
+    <h2 class="lumi-h">
+      Adrian 进入后<span class="dash">——</span><br/>
+      业务先 <em>自助</em>，法务后 <em>复核</em>。
+    </h2>
+    <p class="lumi-intro">过去，业务方传达需求，法务从 0 起草，单稿耗时 1–2 天。Adrian 接入 Slack 后，业务方 @Adrian 直接对话进件，AI 主导起草、迭代、交付；法务从「起草」转向「关键审核」。</p>
+
+    <!-- BEFORE block -->
+    <div class="flow-block flow-block-before">
+      <div class="block-label">BEFORE · 没有 ADRIAN</div>
+      <div class="flow-row cols-6">
+        <div class="flow-card flow-card-manual span-2">
+          <div class="card-num">①</div>
+          <div class="card-name">前台传达业务信息</div>
+          <div class="card-desc">散落多渠道、跟进慢</div>
+          <div class="card-tag">人工</div>
+        </div>
+        <div class="flow-card flow-card-manual span-3">
+          <div class="card-num">②</div>
+          <div class="card-name">法务起草、自查</div>
+          <div class="card-desc">法务从 0 起草，人工多法域调研</div>
+          <div class="card-tag">人工</div>
+        </div>
+        <div class="flow-card flow-card-manual span-1">
+          <div class="card-num">③</div>
+          <div class="card-name">邮件交付给前台</div>
+          <div class="card-desc">无规范留痕、无收集</div>
+          <div class="card-tag">人工</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transition -->
+    <div class="transition-line">
+      ▼ Adrian 介入 · 把「进件」「需求澄清」「交付」交给 AI，新增 <b>审核 / 迭代</b> 两个独立环节 ▼
+    </div>
+
+    <!-- AFTER block -->
+    <div class="flow-block flow-block-after">
+      <div class="block-label">AFTER · 有 ADRIAN</div>
+      <div class="flow-row cols-6">
+        <div class="flow-card flow-card-ai">
+          <div class="card-num">①</div>
+          <div class="card-name">进件</div>
+          <div class="card-desc">Slack 自助进件</div>
+          <div class="card-tag">AI 完成</div>
+        </div>
+        <div class="flow-card flow-card-ai">
+          <div class="card-num">②</div>
+          <div class="card-name">需求澄清</div>
+          <div class="card-desc">Adrian 多轮提问</div>
+          <div class="card-tag">AI 完成</div>
+        </div>
+        <div class="flow-card flow-card-collab">
+          <div class="card-num">③</div>
+          <div class="card-name">出稿</div>
+          <div class="card-desc">人 + AI 协作</div>
+          <div class="card-tag">AI 协作</div>
+        </div>
+        <div class="flow-card flow-card-new">
+          <div class="card-num">④</div>
+          <div class="card-name">审核</div>
+          <div class="card-desc">法务专注复核</div>
+          <div class="card-tag">新环节</div>
+        </div>
+        <div class="flow-card flow-card-new">
+          <div class="card-num">⑤</div>
+          <div class="card-name">迭代</div>
+          <div class="card-desc">AI 按反馈迭代</div>
+          <div class="card-tag">新环节</div>
+        </div>
+        <div class="flow-card flow-card-ai">
+          <div class="card-num">⑥</div>
+          <div class="card-name">交付</div>
+          <div class="card-desc">多端自动回复、沉淀</div>
+          <div class="card-tag">AI 完成</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison table -->
+    <div class="compare-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th style="width:18%;">流程环节</th>
+            <th style="width:30%;">关键数字</th>
+            <th class="th-savings" style="width:52%;">节约 / 提效点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>① 进件</td>
+            <td><b>70%</b> 提需人全自助进件率</td>
+            <td class="td-savings">渠道收敛 / 需求结构化收集</td>
+          </tr>
+          <tr>
+            <td>② 需求澄清</td>
+            <td>与 Adrian 平均沟通 <b>3 轮</b></td>
+            <td class="td-savings">引导结构化表达，减轻法务沟通负担</td>
+          </tr>
+          <tr>
+            <td>③ 出稿</td>
+            <td>初稿耗时 <b>1-2 天 → 4 h</b></td>
+            <td class="td-savings">人工调整上下文，AI 主导起草；逐步向 AI 全自动过渡</td>
+          </tr>
+          <tr>
+            <td>④ 审核 <span style="font-size:10px;color:var(--amber);font-weight:700;letter-spacing:.5px;">NEW</span></td>
+            <td>—</td>
+            <td class="td-savings">从「从 0 起草」转为「关键审核」</td>
+          </tr>
+          <tr>
+            <td>⑤ 迭代 <span style="font-size:10px;color:var(--amber);font-weight:700;letter-spacing:.5px;">NEW</span></td>
+            <td>迭代周期 <b>天 → 小时</b></td>
+            <td class="td-savings">人工调整上下文，AI 快速迭代；逐步向 AI 全自动过渡</td>
+          </tr>
+          <tr>
+            <td>⑥ 交付</td>
+            <td>全程留痕</td>
+            <td class="td-savings">同步沉淀训练语料</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 诚实地说 (bottom) -->
+  <section class="honest-block">
+    <div class="honest-head">
+      <span class="honest-tag">诚实地说</span>
+      <h3>当前 Adrian 还有以下不足</h3>
+    </div>
+    <ul class="honest-list">
+      <li><b>仅 2 / 6 环节 完全 AI 接手</b>——① 进件 + ② 需求澄清 AI 自动化已完成；③ 出稿 / ⑤ 迭代 / ⑥ 交付 正在 AI 全自动化。</li>
+      <li><b>AI 输出可用度有限</b>——主要集中在进件、需求澄清、出稿初步阶段；仍有工作需人工处理、法务修改兜底。</li>
+      <li><b>样本量偏小</b>——ToB 业务，提示词与 Playbook 仍需以数据为基础持续调优，复杂场景 AI 输出可信度有待提高。</li>
+      <li><b>法务知识沉淀决定 Adrian 的未来</b>——法务仍需深度参与每单，知识沉淀的厚度直接决定 AI 上限。</li>
+    </ul>
+  </section>
+
+  <div class="footer">2026 · AI 项目组</div>
+
+</div>
+
+      </div>
+  </div>
+</section>
+
+
+<!-- bottom nav -->
+<footer class="deck-foot">
+  <button class="foot-btn" id="prev-btn" aria-label="上一页">‹</button>
+  <div class="dots" id="dots"></div>
+  <button class="foot-btn" id="next-btn" aria-label="下一页">›</button>
+</footer>
+
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsEl = document.getElementById('dots');
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const barCnt = document.getElementById('bar-cnt');
+  const barTitle = document.getElementById('bar-title');
+
+  slides.forEach((s, i) => {
+    const d = document.createElement('button');
+    d.className = 'dot';
+    d.dataset.idx = i;
+    d.dataset.name = s.dataset.name || ('Slide ' + (i+1));
+    d.addEventListener('click', () => go(i));
+    dotsEl.appendChild(d);
+  });
+  const dots = Array.from(dotsEl.children);
+
+  let cur = 0;
+  function setActive(i){
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    dots.forEach((d, idx) => d.classList.toggle('is-active', idx === cur));
+    slides.forEach((s, idx) => s.classList.toggle('in-view', idx === cur));
+    barCnt.textContent = (cur + 1);
+    barTitle.textContent = slides[cur].dataset.name || '';
+    prevBtn.disabled = (cur === 0);
+    nextBtn.disabled = (cur === slides.length - 1);
+  }
+  function go(i){ slides[i].scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+  prevBtn.addEventListener('click', () => go(cur - 1));
+  nextBtn.addEventListener('click', () => go(cur + 1));
+
+  /* 基于滚动位置判断 "当前" slide：找出 top 已经过视口中线的最后一张
+     —— 比 IntersectionObserver+threshold 健壮，能处理高度超出视口的 slide（如 Adrian） */
+  function updateFromScroll(){
+    const viewportMid = window.innerHeight * 0.4;
+    let activeIdx = 0;
+    for (let i = 0; i < slides.length; i++){
+      const top = slides[i].getBoundingClientRect().top;
+      if (top <= viewportMid) activeIdx = i;
+      else break;
+    }
+    if (activeIdx !== cur) setActive(activeIdx);
+  }
+  window.addEventListener('scroll', updateFromScroll, { passive: true });
+  window.addEventListener('resize', updateFromScroll, { passive: true });
+
+  document.addEventListener('keydown', e => {
+    if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' '){
+      if (cur < slides.length - 1){ e.preventDefault(); go(cur + 1); }
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp'){
+      if (cur > 0){ e.preventDefault(); go(cur - 1); }
+    } else if (e.key === 'Home'){ e.preventDefault(); go(0); }
+    else if (e.key === 'End'){ e.preventDefault(); go(slides.length - 1); }
+  });
+
+  setActive(0);
+  slides[0].classList.add('in-view');
+})();
+</script>
+
+</body>
+</html>
